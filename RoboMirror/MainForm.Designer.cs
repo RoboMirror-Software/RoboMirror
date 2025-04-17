@@ -93,7 +93,7 @@
 			// 
 			// columnHeader4
 			// 
-			this.columnHeader4.Text = "Last backup";
+			this.columnHeader4.Text = "Last successful operation";
 			this.columnHeader4.Width = 110;
 			// 
 			// imageList1

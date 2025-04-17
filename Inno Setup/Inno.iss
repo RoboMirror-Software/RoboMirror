@@ -1,5 +1,5 @@
 #define MyAppName "RoboMirror"
-#define MyAppVersion "1.1"
+#define MyAppVersion "1.2"
 #define MyAppExeName "RoboMirror.exe"
 
 [Setup]

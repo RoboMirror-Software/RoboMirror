@@ -22,30 +22,20 @@ namespace RoboMirror
 	/// </summary>
 	public class ConsoleProcess : IDisposable
 	{
-		#region Fields.
-
+		private Process _process;
 		protected readonly object _syncObject = new object();
-
-		private bool _isDisposed;
 
 		private List<string> _output = new List<string>();
 		private string _fullOutput;
 
-		#endregion
-
 		#region Properties.
-
-		/// <summary>
-		/// Gets the actual process.
-		/// </summary>
-		public Process WrappedProcess { get; private set; }
 
 		/// <summary>
 		/// Gets the start info for the process.
 		/// </summary>
 		public ProcessStartInfo StartInfo
 		{
-			get { return WrappedProcess.StartInfo; }
+			get { return _process.StartInfo; }
 		}
 
 		/// <summary>
@@ -61,7 +51,7 @@ namespace RoboMirror
 
 				try
 				{
-					handle = WrappedProcess.Handle;
+					handle = _process.Handle;
 				}
 				catch (InvalidOperationException)
 				{
@@ -82,7 +72,7 @@ namespace RoboMirror
 			{
 				try
 				{
-					return WrappedProcess.HasExited;
+					return _process.HasExited;
 				}
 				catch (InvalidOperationException)
 				{
@@ -102,7 +92,7 @@ namespace RoboMirror
 			{
 				try
 				{
-					return WrappedProcess.ExitCode;
+					return _process.ExitCode;
 				}
 				catch (InvalidOperationException)
 				{
@@ -151,7 +141,11 @@ namespace RoboMirror
 					// check if the process has exited
 					var lines = Output;
 
-					var output = new StringBuilder(32768);
+					int fullLength = 0;
+					foreach (string line in lines)
+						fullLength += line.Length + Environment.NewLine.Length;
+
+					var output = new StringBuilder(fullLength);
 					foreach (string line in lines)
 						output.AppendLine(line);
 
@@ -201,10 +195,10 @@ namespace RoboMirror
 		/// </param>
 		public ConsoleProcess(ProcessStartInfo startInfo)
 		{
-			WrappedProcess = new Process();
+			_process = new Process();
 
 			if (startInfo != null)
-				WrappedProcess.StartInfo = startInfo;
+				_process.StartInfo = startInfo;
 
 			SetupProcess();
 		}
@@ -215,30 +209,18 @@ namespace RoboMirror
 		/// </summary>
 		public virtual void Dispose()
 		{
-			if (_isDisposed)
+			if (_process == null)
 				return;
 
 			lock (_syncObject)
 			{
-				if (_isDisposed)
+				if (_process == null)
 					return;
 
-				try
-				{
-					WrappedProcess.Kill();
-				}
-				catch (System.ComponentModel.Win32Exception)
-				{
-					// the process might just be terminating
-				}
-				catch (InvalidOperationException)
-				{
-					// the process has either not been started or already exited
-				}
+				KillInternal();
+				_process.Close();
 
-				WrappedProcess.Close();
-
-				_isDisposed = true;
+				_process = null;
 			}
 		}
 
@@ -259,12 +241,12 @@ namespace RoboMirror
 			StartInfo.StandardOutputEncoding = StartInfo.StandardErrorEncoding =
 				Encoding.GetEncoding(Thread.CurrentThread.CurrentCulture.TextInfo.OEMCodePage);
 
-			WrappedProcess.OutputDataReceived += Process_DataReceived;
-			WrappedProcess.ErrorDataReceived += Process_DataReceived;
-			WrappedProcess.Exited += Process_Exited;
+			_process.OutputDataReceived += Process_DataReceived;
+			_process.ErrorDataReceived += Process_DataReceived;
+			_process.Exited += Process_Exited;
 
 			// enable the exited event
-			WrappedProcess.EnableRaisingEvents = true;
+			_process.EnableRaisingEvents = true;
 		}
 
 
@@ -280,10 +262,10 @@ namespace RoboMirror
 				if (HasStarted)
 					throw new InvalidOperationException("The process has already been started.");
 
-				WrappedProcess.Start();
+				_process.Start();
 
-				WrappedProcess.BeginOutputReadLine();
-				WrappedProcess.BeginErrorReadLine();
+				_process.BeginOutputReadLine();
+				_process.BeginErrorReadLine();
 			}
 
 			OnStarted(EventArgs.Empty);
@@ -296,18 +278,32 @@ namespace RoboMirror
 		{
 			lock (_syncObject)
 			{
-				try
-				{
-					WrappedProcess.Kill();
-				}
-				catch (System.ComponentModel.Win32Exception)
-				{
-					// the process might just be terminating
-				}
-				catch (InvalidOperationException)
-				{
-					// the process has either not been started or already exited
-				}
+				KillInternal();
+			}
+		}
+
+		/// <summary>
+		/// Suspends the current thread until the process has exited.
+		/// </summary>
+		public void WaitForExit()
+		{
+			_process.WaitForExit();
+		}
+
+
+		private void KillInternal()
+		{
+			try
+			{
+				_process.Kill();
+			}
+			catch (System.ComponentModel.Win32Exception)
+			{
+				// the process might just be terminating
+			}
+			catch (InvalidOperationException)
+			{
+				// the process has either not been started or already exited
 			}
 		}
 

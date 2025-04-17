@@ -78,8 +78,8 @@ namespace RoboMirror
 
 			var definition = _service.NewTask();
 
-			definition.RegistrationInfo.Description = string.Format("Mirrors \"{0}\" to \"{1}\".",
-				mirrorTask.Source, mirrorTask.Target);
+			definition.RegistrationInfo.Description = string.Format("Mirrors {0} to {1}.",
+				PathHelper.Quote(mirrorTask.Source), PathHelper.Quote(mirrorTask.Target));
 
 			definition.Actions.Add(new ExecAction(Application.ExecutablePath,
 				mirrorTask.Guid, Application.StartupPath));

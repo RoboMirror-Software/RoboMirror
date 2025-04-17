@@ -97,13 +97,29 @@ namespace RoboMirror
 					return;
 			}
 
+			if (!TrySaveTask(task))
+				return;
+
 			AddListViewItem(task);
 
 			// select the newly added item
 			listView1.SelectedIndices.Clear();
 			listView1.SelectedIndices.Add(listView1.Items.Count - 1);
+		}
 
-			_taskManager.SaveTask(task);
+		private bool TrySaveTask(MirrorTask task)
+		{
+			try
+			{
+				_taskManager.SaveTask(task);
+				return true;
+			}
+			catch (Exception e)
+			{
+				MessageBox.Show(this, "The mirror task could not be saved.\n\n" + e.Message,
+					"I/O error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return false;
+			}
 		}
 
 		private void editButton_Click(object sender, EventArgs e)
@@ -118,9 +134,10 @@ namespace RoboMirror
 					return;
 			}
 
-			UpdateListViewItem(task);
+			if (!TrySaveTask(task))
+				return;
 
-			_taskManager.SaveTask(task);
+			UpdateListViewItem(task);
 		}
 
 		private void removeButton_Click(object sender, EventArgs e)
@@ -132,7 +149,16 @@ namespace RoboMirror
 				MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
 				return;
 
-			_taskManager.DeleteTask(SelectedTask);
+			try
+			{
+				_taskManager.DeleteTask(SelectedTask);
+			}
+			catch (Exception exception)
+			{
+				MessageBox.Show(this, "The mirror task could not be deleted.\n\n" + exception.Message,
+					"I/O error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return;
+			}
 
 			listView1.Items.RemoveAt(listView1.SelectedIndices[0]);
 		}
@@ -233,7 +259,7 @@ namespace RoboMirror
 			item.ImageIndex = 0;
 			item.SubItems.Add(task.Source);
 			item.SubItems.Add(task.Target);
-			item.SubItems.Add(task.LastBackup.HasValue ? task.LastBackup.Value.ToString("g") : "Never");
+			item.SubItems.Add(task.LastOperation.HasValue ? task.LastOperation.Value.ToString("g") : "Never");
 
 			listView1.Items.Add(item);
 		}
@@ -250,8 +276,8 @@ namespace RoboMirror
 				{
 					item.SubItems[1].Text = task.Source;
 					item.SubItems[2].Text = task.Target;
-					item.SubItems[3].Text = (task.LastBackup.HasValue ?
-						task.LastBackup.Value.ToString("g") : "Never");
+					item.SubItems[3].Text = (task.LastOperation.HasValue ?
+						task.LastOperation.Value.ToString("g") : "Never");
 
 					break;
 				}

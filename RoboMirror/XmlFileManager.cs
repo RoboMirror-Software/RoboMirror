@@ -72,7 +72,7 @@ namespace RoboMirror
 			catch (Exception e)
 			{
 				Dispose();
-				throw new InvalidDataException(string.Format("\"{0}\" is corrupt.", path), e);
+				throw new InvalidDataException(string.Format("{0} is corrupt.", PathHelper.Quote(path)), e);
 			}
 
 			if (readOnly)

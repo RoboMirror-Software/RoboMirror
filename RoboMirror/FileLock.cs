@@ -26,7 +26,7 @@ namespace RoboMirror
 		{ }
 
 		public FileLockedException(string path, Exception innerException)
-			: base(string.Format("The file \"{0}\" is locked.", path), innerException)
+			: base(string.Format("The file {0} is locked.", PathHelper.Quote(path)), innerException)
 		{ }
 	}
 	#endregion
