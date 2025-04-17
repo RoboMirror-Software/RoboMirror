@@ -8,7 +8,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Xml;
+using System.Linq;
+using System.Xml.Linq;
 using Microsoft.Win32.TaskScheduler;
 
 namespace RoboMirror
@@ -33,19 +34,13 @@ namespace RoboMirror
 			: base(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), PATH), "tasks", readOnly)
 		{ }
 
-		/// <summary>
-		/// Loads all tasks from the XML file.
-		/// </summary>
+		/// <summary>Loads all tasks from the XML file.</summary>
 		public List<MirrorTask> LoadTasks()
 		{
 			var tasks = new List<MirrorTask>();
 
-			var taskNodes = Document.DocumentElement.SelectNodes("task");
-
-			foreach (XmlNode node in taskNodes)
-			{
-				tasks.Add(MirrorTask.Deserialize(node));
-			}
+			foreach (var element in RootElement.Elements("task"))
+				tasks.Add(MirrorTask.Deserialize(element));
 
 			return tasks;
 		}
@@ -59,34 +54,32 @@ namespace RoboMirror
 			if (string.IsNullOrEmpty(guid))
 				return null;
 
-			var node = GetTaskNode(guid);
+			var element = GetTaskElement(guid);
 
-			return (node == null ? null : MirrorTask.Deserialize(node));
+			return (element == null ? null : MirrorTask.Deserialize(element));
 		}
 
 
-		/// <summary>
-		/// Saves the specified task to the XML file.
-		/// </summary>
+		/// <summary>Saves the specified task to the XML file.</summary>
 		public void SaveTask(MirrorTask task)
 		{
 			if (task == null)
 				throw new ArgumentNullException("task");
 
-			var node = GetTaskNode(task.Guid);
-			if (node != null)
+			var element = GetTaskElement(task.Guid);
+			if (element != null)
 			{
 				// the task already exists in the file, reset its XML node by removing
 				// all attributes and children
-				node.RemoveAll();
+				element.RemoveAll();
 			}
 			else
 			{
-				node = Document.CreateElement("task");
-				Document.DocumentElement.AppendChild(node);
+				element = new XElement("task");
+				RootElement.Add(element);
 			}
 
-			task.Serialize(node);
+			task.Serialize(element);
 
 			Save();
 		}
@@ -104,31 +97,28 @@ namespace RoboMirror
 			try
 			{
 				using (var scheduledTasksManager = new ScheduledTasksManager())
-				{
 					scheduledTasksManager.Delete(task);
-				}
 			}
 			catch { }
 
-			var node = GetTaskNode(task.Guid);
-			if (node == null)
+			var element = GetTaskElement(task.Guid);
+			if (element == null)
 				return;
 
-			node.ParentNode.RemoveChild(node);
+			element.Remove();
 
 			Save();
 		}
 
 
 		/// <summary>
-		/// Returns the specified task's node in the XML document or null
-		/// if there is no matching node.
+		/// Returns the specified task's element in the XML document or null
+		/// if there is no matching element.
 		/// </summary>
 		/// <param name="guid">GUID of the task.</param>
-		private XmlNode GetTaskNode(string guid)
+		private XElement GetTaskElement(string guid)
 		{
-			return Document.DocumentElement.SelectSingleNode(
-				string.Format("task[@guid=\"{0}\"]", guid));
+			return RootElement.Elements("task").SingleOrDefault(e => e.Attribute("guid").Value == guid);
 		}
 	}
 }

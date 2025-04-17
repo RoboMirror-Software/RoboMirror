@@ -30,10 +30,7 @@ namespace RoboMirror
 				// the argument is most likely a GUID of a task scheduled for backup
 				GUI.ScheduledBackupExecutor form;
 
-				try
-				{
-					form = new GUI.ScheduledBackupExecutor(args[1]);
-				}
+				try { form = new GUI.ScheduledBackupExecutor(args[1]); }
 				catch (InvalidOperationException e)
 				{
 					MessageBox.Show("A scheduled backup task could not be initiated:\n\n" + e.Message,
@@ -48,10 +45,7 @@ namespace RoboMirror
 			{
 				GUI.MainForm form;
 
-				try
-				{
-					form = new GUI.MainForm();
-				}
+				try { form = new GUI.MainForm(); }
 				catch (FileLockedException)
 				{
 					MessageBox.Show("Another RoboMirror instance is currently running.", "RoboMirror cannot be started",

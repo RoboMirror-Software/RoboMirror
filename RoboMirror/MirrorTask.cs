@@ -8,7 +8,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Xml;
+using System.Linq;
+using System.Xml.Linq;
 
 namespace RoboMirror
 {
@@ -99,9 +100,6 @@ namespace RoboMirror
 		#endregion
 
 
-		/// <summary>
-		/// Creates a new MirrorTask.
-		/// </summary>
 		public MirrorTask()
 		{
 			Guid = System.Guid.NewGuid().ToString();
@@ -113,171 +111,126 @@ namespace RoboMirror
 		/// <summary>
 		/// Converts the task to an XML representation at the specified XML node.
 		/// </summary>
-		public void Serialize(XmlNode taskNode)
+		public void Serialize(XElement taskElement)
 		{
-			if (taskNode == null)
-				throw new ArgumentNullException("taskNode");
+			if (taskElement == null)
+				throw new ArgumentNullException("taskElement");
 
-			var document = taskNode.OwnerDocument;
+			taskElement.SetAttributeValue("guid", Guid);
 
-			var attribute = document.CreateAttribute("guid");
-			attribute.Value = Guid;
-			taskNode.Attributes.Append(attribute);
-
-			var node = document.CreateElement("source");
-			node.InnerText = Source;
-			taskNode.AppendChild(node);
-
-			node = document.CreateElement("useVolumeShadowCopy");
-			node.InnerText = UseVolumeShadowCopy.ToString();
-			taskNode.AppendChild(node);
+			taskElement.SetElementValue("source", Source);
+			taskElement.SetElementValue("useVolumeShadowCopy", UseVolumeShadowCopy.ToString());
 
 			if (ExcludedFiles.Count > 0)
 			{
-				var exclusionsNode = document.CreateElement("exclusions");
-				taskNode.AppendChild(exclusionsNode);
+				var exclusionsElement = new XElement("exclusions");
+				taskElement.Add(exclusionsElement);
 
 				foreach (string exclusion in ExcludedFiles)
 				{
-					if (string.IsNullOrEmpty(exclusion))
-						continue;
-
-					node = document.CreateElement("file");
-					node.InnerText = exclusion;
-					exclusionsNode.AppendChild(node);
+					if (!string.IsNullOrEmpty(exclusion))
+						exclusionsElement.Add(new XElement("file", exclusion));
 				}
 			}
 
 			if (ExcludedFolders.Count > 0)
 			{
-				var exclusionsNode = (XmlElement)taskNode.SelectSingleNode("exclusions");
-				if (exclusionsNode == null)
+				var exclusionsElement = taskElement.Element("exclusions");
+				if (exclusionsElement == null)
 				{
-					exclusionsNode = document.CreateElement("exclusions");
-					taskNode.AppendChild(exclusionsNode);
+					exclusionsElement = new XElement("exclusions");
+					taskElement.Add(exclusionsElement);
 				}
 
 				foreach (string exclusion in ExcludedFolders)
 				{
-					if (string.IsNullOrEmpty(exclusion))
-						continue;
-
-					node = document.CreateElement("folder");
-					node.InnerText = exclusion;
-					exclusionsNode.AppendChild(node);
+					if (!string.IsNullOrEmpty(exclusion))
+						exclusionsElement.Add(new XElement("folder", exclusion));
 				}
 			}
 
-			node = document.CreateElement("excludedAttributes");
-			node.InnerText = (ExcludedAttributes == null ? string.Empty : ExcludedAttributes);
-			taskNode.AppendChild(node);
-
-			node = document.CreateElement("target");
-			node.InnerText = Target;
-			taskNode.AppendChild(node);
-
-			node = document.CreateElement("extendedAttributes");
-			node.InnerText = (ExtendedAttributes == null ? string.Empty : ExtendedAttributes);
-			taskNode.AppendChild(node);
-
-			node = document.CreateElement("overwriteNewerFiles");
-			node.InnerText = OverwriteNewerFiles.ToString();
-			taskNode.AppendChild(node);
-
-			node = document.CreateElement("deleteExtraItems");
-			node.InnerText = DeleteExtraItems.ToString();
-			taskNode.AppendChild(node);
+			taskElement.SetElementValue("excludedAttributes", ExcludedAttributes ?? string.Empty);
+			taskElement.SetElementValue("target", Target);
+			taskElement.SetElementValue("extendedAttributes", ExtendedAttributes ?? string.Empty);
+			taskElement.SetElementValue("overwriteNewerFiles", OverwriteNewerFiles.ToString());
+			taskElement.SetElementValue("deleteExtraItems", DeleteExtraItems.ToString());
 
 			if (!string.IsNullOrEmpty(CustomRobocopySwitches))
-			{
-				node = document.CreateElement("customRobocopySwitches");
-				node.InnerText = CustomRobocopySwitches;
-				taskNode.AppendChild(node);
-			}
-
-			if (LastOperation.HasValue)
-			{
-				node = document.CreateElement("lastOperation");
-				node.InnerText = LastOperation.Value.ToUniversalTime().ToString("u",
-					System.Globalization.CultureInfo.InvariantCulture);
-				taskNode.AppendChild(node);
-			}
+				taskElement.SetElementValue("customRobocopySwitches", CustomRobocopySwitches);
 		}
 
 		/// <summary>
 		/// Recreates a task from the specified XML node.
 		/// </summary>
-		public static MirrorTask Deserialize(XmlNode taskNode)
+		public static MirrorTask Deserialize(XElement taskElement)
 		{
-			if (taskNode == null)
-				throw new ArgumentNullException("taskNode");
+			if (taskElement == null)
+				throw new ArgumentNullException("taskElement");
 
 			var task = new MirrorTask();
 
-			task.Guid = taskNode.Attributes["guid"].Value;
-			if (string.IsNullOrEmpty(task.Guid))
-				throw new XmlException("Invalid mirror task GUID.");
+			task.Guid = taskElement.Attribute("guid").Value;
+			task.Source = taskElement.Element("source").Value;
 
-			task.Source = taskNode.SelectSingleNode("source").InnerText;
+			var element = taskElement.Element("useVolumeShadowCopy");
+			if (element != null)
+				task.UseVolumeShadowCopy = bool.Parse(element.Value);
 
-			var node = taskNode.SelectSingleNode("useVolumeShadowCopy");
-			if (node != null)
-				task.UseVolumeShadowCopy = bool.Parse(node.InnerText);
-
-			node = taskNode.SelectSingleNode("exclusions");
-			if (node != null)
+			element = taskElement.Element("exclusions");
+			if (element != null)
 			{
-				foreach (XmlElement file in node.SelectNodes("file"))
-					if (!string.IsNullOrEmpty(file.InnerText))
-						task.ExcludedFiles.Add(file.InnerText);
-				foreach (XmlElement folder in node.SelectNodes("folder"))
-					if (!string.IsNullOrEmpty(folder.InnerText))
-						task.ExcludedFolders.Add(folder.InnerText);
+				foreach (var file in element.Elements("file"))
+					if (!string.IsNullOrEmpty(file.Value))
+						task.ExcludedFiles.Add(file.Value);
+				foreach (var folder in element.Elements("folder"))
+					if (!string.IsNullOrEmpty(folder.Value))
+						task.ExcludedFolders.Add(folder.Value);
 
 				// migrate from RoboMirror format prior to v1.0
-				foreach (XmlElement item in node.SelectNodes("item"))
+				foreach (var item in element.Elements("item"))
 				{
-					if (string.IsNullOrEmpty(item.InnerText))
+					if (string.IsNullOrEmpty(item.Value))
 						continue;
 
-					if (item.InnerText[0] == Path.DirectorySeparatorChar &&
-						Directory.Exists(task.Source + item.InnerText))
-						task.ExcludedFolders.Add(item.InnerText);
+					if (item.Value[0] == Path.DirectorySeparatorChar &&
+						Directory.Exists(task.Source + item.Value))
+						task.ExcludedFolders.Add(item.Value);
 					else
-						task.ExcludedFiles.Add(item.InnerText);
+						task.ExcludedFiles.Add(item.Value);
 				}
 			}
 
-			node = taskNode.SelectSingleNode("excludedAttributes");
-			if (node != null)
-				task.ExcludedAttributes = node.InnerText;
+			element = taskElement.Element("excludedAttributes");
+			if (element != null)
+				task.ExcludedAttributes = element.Value;
 
-			task.Target = taskNode.SelectSingleNode("target").InnerText;
+			task.Target = taskElement.Element("target").Value;
 
-			node = taskNode.SelectSingleNode("extendedAttributes");
-			if (node != null)
-				task.ExtendedAttributes = node.InnerText;
+			element = taskElement.Element("extendedAttributes");
+			if (element != null)
+				task.ExtendedAttributes = element.Value;
 
-			node = taskNode.SelectSingleNode("overwriteNewerFiles");
-			if (node != null)
-				task.OverwriteNewerFiles = bool.Parse(node.InnerText);
+			element = taskElement.Element("overwriteNewerFiles");
+			if (element != null)
+				task.OverwriteNewerFiles = bool.Parse(element.Value);
 			else // for backwards compatibility:
 				task.OverwriteNewerFiles = true;
 
-			node = taskNode.SelectSingleNode("deleteExtraItems");
-			if (node != null)
-				task.DeleteExtraItems = bool.Parse(node.InnerText);
+			element = taskElement.Element("deleteExtraItems");
+			if (element != null)
+				task.DeleteExtraItems = bool.Parse(element.Value);
 
-			node = taskNode.SelectSingleNode("customRobocopySwitches");
-			if (node != null)
-				task.CustomRobocopySwitches = node.InnerText;
+			element = taskElement.Element("customRobocopySwitches");
+			if (element != null)
+				task.CustomRobocopySwitches = element.Value;
 
-			node = taskNode.SelectSingleNode("lastOperation");
-			if (node == null) // for backwards compatibility
-				node = taskNode.SelectSingleNode("lastBackup");
-			if (node != null)
+			// for backwards compatibility:
+			element = taskElement.Element("lastOperation");
+			if (element == null) // for further backwards compatibility
+				element = taskElement.Element("lastBackup");
+			if (element != null)
 			{
-				task.LastOperation = DateTime.ParseExact(node.InnerText, "u",
+				task.LastOperation = DateTime.ParseExact(element.Value, "u",
 					System.Globalization.CultureInfo.InvariantCulture).ToLocalTime();
 			}
 

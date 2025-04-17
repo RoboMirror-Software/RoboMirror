@@ -162,7 +162,6 @@ namespace RoboMirror
 				}
 			}
 
-			private delegate void Action();
 			private void Main()
 			{
 				string sourceFolder = PathHelper.AppendSeparator(_session.SourceFolder);                         // C:\,  C:\Folder\, \\Server\Share\, \\Server\Share\Folder\
@@ -261,19 +260,24 @@ namespace RoboMirror
 					_backup.BackupComplete();
 					VerifyWriterStatus();
 
-					_backup.UnexposeSnapshot(_volumeSnapshotID);
 					_session._mountPoint = null;
 				}
 
 				if (_snapshotSetID != Guid.Empty)
-					_backup.DeleteSnapshotSet(_snapshotSetID, forceDelete: true);
+				{
+					// apparently fails on Windows 2008 - the non-persistent shadow copy
+					// should be deleted as soon as _backup is disposed of anyway,
+					// so just try to explicitly delete the snapshot set and ignore any issues
+					try { _backup.DeleteSnapshotSet(_snapshotSetID, forceDelete: true); }
+					catch { }
+				}
 
 				if (_backup != null)
 					_backup.Dispose();
 
 				lock (_disposeEventSyncObject)
 				{
-					_disposeEvent.Close();
+					_disposeEvent.Dispose();
 					_disposeEvent = null;
 				}
 			}

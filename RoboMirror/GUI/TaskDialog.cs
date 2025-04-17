@@ -122,10 +122,8 @@ namespace RoboMirror.GUI
 
 			foreach (RadioButton b in groupBox1.Controls)
 			{
-				if (b == button)
-					continue;
-
-				b.Checked = false;
+				if (b != button)
+					b.Checked = false;
 			}
 
 			HasChanged = true;

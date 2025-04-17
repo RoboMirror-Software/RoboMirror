@@ -5,21 +5,19 @@
  * about permitted and prohibited uses of this code.
  */
 
+using Microsoft.Win32.TaskScheduler;
+using RoboMirror.Properties;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using RoboMirror.Properties;
-using Microsoft.Win32.TaskScheduler;
 
 namespace RoboMirror.GUI
 {
-	/// <summary>
-	/// Main form of the application.
-	/// </summary>
 	public partial class MainForm : BaseForm
 	{
 		private TaskManager _taskManager;
-		private List<MirrorOperation> _activeOperations = new List<MirrorOperation>();
 
 
 		/// <summary>
@@ -35,17 +33,23 @@ namespace RoboMirror.GUI
 		}
 
 
-		/// <exception cref="FileLockedException">The TaskManager could not get exclusive write access to its XML file.</exception>
+		/// <exception cref="FileLockedException">
+		/// Could not get exclusive write access to the Tasks.xml file (most likely because another GUI instance is running).
+		/// </exception>
 		public MainForm()
 		{
 			InitializeComponent();
 
+			HideQueuePanel();
+
 			backupButton.Font = new System.Drawing.Font(Font, System.Drawing.FontStyle.Bold);
 
-			_taskManager = new TaskManager(false);
+			_taskManager = new TaskManager(readOnly: false);
 
 			var tasks = _taskManager.LoadTasks();
-			foreach (MirrorTask task in tasks)
+			Log.LoadLastSuccessTimeStamps(tasks);
+
+			foreach (var task in tasks)
 				AddListViewItem(task);
 
 			// select the first item
@@ -54,10 +58,48 @@ namespace RoboMirror.GUI
 		}
 
 
+		private void HideQueuePanel()
+		{
+			SuspendLayout();
+
+			queuePanel.Visible = false;
+			Height -= queuePanel.Height + 14;
+			// let the queue panel (below the form) be shifted vertically with the form
+			queuePanel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+			// let the main panel's size increase with the form
+			mainPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+
+			ResumeLayout();
+		}
+
+		private void ShowQueuePanel()
+		{
+			if (queuePanel.Visible)
+				return;
+
+			SuspendLayout();
+
+			// fix the current height of the main panel
+			mainPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+			// set the current height of the form (with hidden queue panel) as new minimum height
+			var minSize = this.MinimumSize;
+			minSize.Height = this.Height;
+			this.MinimumSize = minSize;
+
+			// increase the form's height to show the query panel and let its size increase with the form
+			Height += queuePanel.Height + 14;
+			queuePanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+			queuePanel.Visible = true;
+
+			ResumeLayout();
+		}
+
+
 		private void pictureBox1_Click(object sender, EventArgs e)
 		{
 			label1.Text = string.Format("RoboMirror v{0}\nCopyright (c) Martin Kinkelin",
-				Application.ProductVersion);
+				Application.ProductVersion.TrimEnd('0', '.'));
 
 			try { System.Diagnostics.Process.Start("http://robomirror.sourceforge.net/"); }
 			catch { }
@@ -67,10 +109,8 @@ namespace RoboMirror.GUI
 		private void listView1_SelectedIndexChanged(object sender, EventArgs e)
 		{
 			editButton.Enabled = removeButton.Enabled = historyButton.Enabled = scheduleButton.Enabled =
-				(listView1.SelectedIndices.Count > 0);
-
-			backupButton.Enabled = restoreButton.Enabled =
-				(listView1.SelectedIndices.Count > 0 && GetAssociatedActiveOperation(SelectedTask) == null);
+				backupButton.Enabled = restoreButton.Enabled =
+					(listView1.SelectedIndices.Count > 0);
 		}
 
 		private void listView1_DoubleClick(object sender, EventArgs e)
@@ -89,7 +129,7 @@ namespace RoboMirror.GUI
 
 		private void addButton_Click(object sender, EventArgs e)
 		{
-			MirrorTask task = new MirrorTask();
+			var task = new MirrorTask();
 
 			using (TaskDialog dialog = new TaskDialog(task))
 			{
@@ -128,7 +168,7 @@ namespace RoboMirror.GUI
 			if (task == null)
 				return;
 
-			using (TaskDialog dialog = new TaskDialog(task))
+			using (var dialog = new TaskDialog(task))
 			{
 				if (dialog.ShowDialog(this) != DialogResult.Yes)
 					return;
@@ -170,9 +210,7 @@ namespace RoboMirror.GUI
 				return;
 
 			using (var dialog = new TaskHistoryForm(SelectedTask))
-			{
 				dialog.ShowDialog(this);
-			}
 		}
 
 
@@ -182,70 +220,32 @@ namespace RoboMirror.GUI
 				return;
 
 			using (var dialog = new ScheduleTaskDialog(SelectedTask))
-			{
 				dialog.ShowDialog(this);
-			}
 		}
 
 
 		private void backupButton_Click(object sender, EventArgs e)
 		{
-			StartOperation(reverse: false, simulateFirst: Settings.Default.SimulateFirst);
+			StartOperation(reverse: false);
 		}
 
 		private void restoreButton_Click(object sender, EventArgs e)
 		{
-			StartOperation(reverse: true, simulateFirst: Settings.Default.SimulateFirst);
+			StartOperation(reverse: true);
 		}
 
-
-		private MirrorOperation GetAssociatedActiveOperation(MirrorTask task)
-		{
-			foreach (var op in _activeOperations)
-			{
-				if (op.Task == task)
-					return op;
-			}
-
-			return null;
-		}
-
-		private void StartOperation(bool reverse, bool simulateFirst)
+		private void StartOperation(bool reverse)
 		{
 			var task = SelectedTask;
 			if (task == null)
 				return;
 
-			if (GetAssociatedActiveOperation(task) != null)
-				return;
-
 			var operation = new MirrorOperation(this, task, reverse);
+			operation.Finished += (s, e) => { UpdateListViewItem(operation.Task); };
 
-			operation.Finished += Operation_Finished;
+			mirrorOperationsQueueControl.Push(operation);
 
-			_activeOperations.Add(operation);
-
-			backupButton.Enabled = restoreButton.Enabled = false;
-
-			operation.Start(simulateFirst);
-		}
-
-		private void Operation_Finished(object sender, FinishedEventArgs e)
-		{
-			var operation = (MirrorOperation)sender;
-
-			if (e.Success)
-			{
-				UpdateListViewItem(operation.Task);
-				_taskManager.SaveTask(operation.Task);
-			}
-
-			_activeOperations.Remove(operation);
-
-			// enable the backup and restore buttons if the associated task
-			// is currently selected
-			if (SelectedTask == operation.Task)
-				backupButton.Enabled = restoreButton.Enabled = true;
+			ShowQueuePanel();
 		}
 
 
@@ -270,18 +270,14 @@ namespace RoboMirror.GUI
 		/// </summary>
 		private void UpdateListViewItem(MirrorTask task)
 		{
-			foreach (ListViewItem item in listView1.Items)
-			{
-				if (item.Tag == task)
-				{
-					item.SubItems[1].Text = task.Source;
-					item.SubItems[2].Text = task.Target;
-					item.SubItems[3].Text = (task.LastOperation.HasValue ?
-						task.LastOperation.Value.ToString("g") : "Never");
+			var item = listView1.Items.Cast<ListViewItem>().FirstOrDefault(i => i.Tag == task);
+			if (item == null)
+				return;
 
-					break;
-				}
-			}
+			item.SubItems[1].Text = task.Source;
+			item.SubItems[2].Text = task.Target;
+			item.SubItems[3].Text = (task.LastOperation.HasValue ?
+				task.LastOperation.Value.ToString("g") : "Never");
 		}
 
 		protected override void OnFormClosing(FormClosingEventArgs e)
@@ -306,7 +302,7 @@ namespace RoboMirror.GUI
 			// processes are killed anyway
 			// so simply do not prompt and then abort in OnFormClosed()
 
-			if (_activeOperations.Count > 0 && e.CloseReason == CloseReason.UserClosing)
+			if (!mirrorOperationsQueueControl.IsEmpty && e.CloseReason == CloseReason.UserClosing)
 			{
 				if (MessageBox.Show(this, "Are you sure you want to abort all active operations?",
 					"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) !=
@@ -320,15 +316,34 @@ namespace RoboMirror.GUI
 
 		protected override void OnFormClosed(FormClosedEventArgs e)
 		{
-			// copy _activeOperations to a new array
-			// reason: aborting an operation will finish it, and Operation_Finished()
-			// removes the operation from the _activeOperations list
-			foreach (var operation in _activeOperations.ToArray())
-				operation.Abort();
+			mirrorOperationsQueueControl.AbortAll();
 
 			_taskManager.Dispose();
 
 			base.OnFormClosed(e);
+		}
+
+
+		[DllImport("advapi32.dll", SetLastError = true)]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		private static extern bool InitiateSystemShutdownEx(
+			string lpMachineName,
+			string lpMessage,
+			int dwTimeout,
+			[MarshalAs(UnmanagedType.Bool)] bool bForceAppsClosed,
+			[MarshalAs(UnmanagedType.Bool)] bool bRebootAfterShutdown,
+			int dwReason);
+
+		private void mirrorOperationsQueueControl_AllFinished(object sender, EventArgs e)
+		{
+			if (!shutdownWhenDoneCheckBox.Checked)
+				return;
+
+			const string message = "All RoboMirror operations have finished - shutting down as requested.";
+			const int timeoutSeconds = 60;
+
+			if (TokenPrivilegesAdjuster.Enable("SeShutdownPrivilege"))
+				InitiateSystemShutdownEx(null, message, timeoutSeconds, false, false, 0);
 		}
 	}
 }

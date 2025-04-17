@@ -145,9 +145,9 @@
 			this.pictureBox3.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
 			this.pictureBox3.BackColor = System.Drawing.SystemColors.ControlDarkDark;
 			this.pictureBox3.Image = global::RoboMirror.Properties.Resources.data_forbidden32;
-			this.pictureBox3.Location = new System.Drawing.Point(537, 10);
+			this.pictureBox3.Location = new System.Drawing.Point(550, 13);
 			this.pictureBox3.Name = "pictureBox3";
-			this.pictureBox3.Size = new System.Drawing.Size(37, 37);
+			this.pictureBox3.Size = new System.Drawing.Size(32, 32);
 			this.pictureBox3.TabIndex = 1002;
 			this.pictureBox3.TabStop = false;
 			// 
