@@ -19,9 +19,6 @@ namespace RoboMirror
 	/// </summary>
 	public partial class ExcludedItemsDialog : BaseDialog
 	{
-		private string _sourceFolder;
-
-
 		/// <summary>
 		/// Gets the list of excluded files.
 		/// </summary>
@@ -38,28 +35,17 @@ namespace RoboMirror
 		public string ExcludedAttributes { get; private set; }
 
 
-		/// <summary>
-		/// Creates a new dialog.
-		/// </summary>
 		/// <param name="task">Task whose excluded items are to be edited.</param>
-		/// <param name="sourceFolder">Path to the current source folder.</param>
-		public ExcludedItemsDialog(MirrorTask task, string sourceFolder)
+		public ExcludedItemsDialog(MirrorTask task)
 		{
 			if (task == null)
 				throw new ArgumentNullException("task");
-
-			_sourceFolder = sourceFolder;
-			if (!Directory.Exists(_sourceFolder))
-				throw new InvalidOperationException("The source folder does not exist.");
 
 			ExcludedFiles = new List<string>(task.ExcludedFiles);
 			ExcludedFolders = new List<string>(task.ExcludedFolders);
 			ExcludedAttributes = (task.ExcludedAttributes == null ? string.Empty : task.ExcludedAttributes);
 
 			InitializeComponent();
-
-			excludedFilesControl.BaseFolder = sourceFolder;
-			excludedFoldersControl.BaseFolder = sourceFolder;
 
 			foreach (string file in ExcludedFiles)
 				excludedFilesControl.ExcludedItems.Add(file);
@@ -71,6 +57,17 @@ namespace RoboMirror
 				foreach (CheckBox child in tableLayoutPanel1.Controls)
 					child.Checked = ExcludedAttributes.Contains((string)child.Tag);
 			}
+		}
+
+		public DialogResult ShowDialog(IWin32Window owner, string sourceFolder)
+		{
+			if (!Directory.Exists(sourceFolder))
+				throw new InvalidOperationException("The source folder does not exist.");
+
+			excludedFilesControl.BaseFolder = sourceFolder;
+			excludedFoldersControl.BaseFolder = sourceFolder;
+
+			return ShowDialog(owner);
 		}
 
 

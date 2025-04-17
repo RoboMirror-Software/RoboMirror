@@ -15,8 +15,21 @@ namespace RoboMirror
 {
 	public partial class ExcludedItemsControl : UserControl
 	{
+		private string _baseFolder;
+
 		public ExcludedItemsMode Mode { get; set; }
-		public string BaseFolder { get; set; }
+
+		public string BaseFolder
+		{
+			get { return _baseFolder; }
+			set
+			{
+				_baseFolder = value;
+				folderBrowserDialog.SelectedPath = value;
+				openFileDialog.InitialDirectory = value;
+			}
+		}
+
 		public System.Collections.IList ExcludedItems { get { return listBox.Items; } }
 
 		public event EventHandler Changed;
@@ -58,8 +71,8 @@ namespace RoboMirror
 				? "Add the wildcard above to the list.\nAll subfolders with a matching name will be excluded with all of their contents."
 				: "Add the wildcard above to the list.\nAll files with a matching name will be excluded from each folder.");
 
-			folderBrowserDialog.SelectedPath = BaseFolder;
-			openFileDialog.InitialDirectory = BaseFolder;
+			// add a wildcard by pressing Enter
+			wildcardTextBox.KeyPress += (s, ea) => { if (ea.KeyChar == 13 && wildcardTextBox.Text.Length > 0) addWildcardButton.PerformClick(); };
 		}
 
 		protected virtual void OnChanged(EventArgs e)
@@ -105,8 +118,6 @@ namespace RoboMirror
 
 				folderBrowserDialog.SelectedPath = BaseFolder;
 			}
-
-			folderBrowserDialog.SelectedPath = BaseFolder;
 		}
 
 		private void AddFiles()
@@ -134,13 +145,13 @@ namespace RoboMirror
 		{
 			var relativePaths = new List<string>();
 
-			foreach (string rawPath in paths)
+			foreach (string path in paths)
 			{
-				string path = CorrectPath(rawPath);
-				if (!IsInBaseFolder(path))
+				string relativePath;
+				if (!PathHelper.IsInFolder(path, BaseFolder, out relativePath) ||
+				    relativePath.Length == 1) // path is the BaseFolder itself
 					return false;
 
-				string relativePath = path.Substring(BaseFolder.Length);
 				if (!listBox.Items.Contains(relativePath))
 					relativePaths.Add(relativePath);
 			}
@@ -186,42 +197,25 @@ namespace RoboMirror
 			if (wildcardTextBox.Text.Length == 0)
 				return;
 
-			string wildcard = CorrectPath(wildcardTextBox.Text);
+			string wildcard = wildcardTextBox.Text;
 			if (wildcard.Contains(Path.DirectorySeparatorChar.ToString()))
 			{
 				MessageBox.Show("Wildcards must not contain any path information.",
+					"Invalid wildcard", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+			else if (wildcard.Contains("\""))
+			{
+				MessageBox.Show("Wildcards must not contain any double-quotes.",
 					"Invalid wildcard", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 			else if (!listBox.Items.Contains(wildcard))
 			{
 				listBox.Items.Add(wildcard);
 				OnChanged(EventArgs.Empty);
+				wildcardTextBox.Text = string.Empty;
 			}
 
-			wildcardTextBox.Text = string.Empty;
 			wildcardTextBox.Focus();
-		}
-
-
-		private static string CorrectPath(string path)
-		{
-			return path.Replace('/', Path.DirectorySeparatorChar) // replace all forward slashes
-				.Replace('\\', Path.DirectorySeparatorChar)       // replace all backslashes
-				.Trim()                                           // eliminate all leading and trailing white-spaces
-				.Trim('"');                                       // eliminate all leading and trailing double-quotes
-		}
-
-		private bool IsInBaseFolder(string path)
-		{
-			if (path.Length < BaseFolder.Length + 2)
-				return false;
-
-			// use a case-insensitive comparison under Windows
-			var comparison = (Path.DirectorySeparatorChar == '\\' ?
-				StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-
-			return (string.Compare(path, 0, BaseFolder, 0, BaseFolder.Length, comparison) == 0 &&
-				path[BaseFolder.Length] == Path.DirectorySeparatorChar);
 		}
 	}
 

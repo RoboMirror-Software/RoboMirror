@@ -152,7 +152,7 @@ namespace RoboMirror
 			_process = new ConsoleProcess();
 
 			_process.StartInfo.FileName = _vshadowPath;
-			_process.StartInfo.Arguments = string.Format("-p -nw \"{0}\"", volume);
+			_process.StartInfo.Arguments = string.Format("-p -nw {0}", PathHelper.QuotePath(volume));
 
 			_process.Exited += CreationProcess_Exited;
 
@@ -237,7 +237,7 @@ namespace RoboMirror
 			_process = new ConsoleProcess();
 
 			_process.StartInfo.FileName = _vshadowPath;
-			_process.StartInfo.Arguments = string.Format("-el={0},\"{1}\"", SnapshotID, path);
+			_process.StartInfo.Arguments = string.Format("-el={0},{1}", SnapshotID, PathHelper.QuotePath(path));
 
 			_process.Exited += MountProcess_Exited;
 

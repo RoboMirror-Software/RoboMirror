@@ -74,23 +74,13 @@ namespace RoboMirror
 
 		private void sourceFolderTextBox_TextChanged(object sender, EventArgs e)
 		{
-			excludedItemsButton.Enabled = Directory.Exists(sourceFolderTextBox.Text);
-
-			// vshadow.exe cannot create volume shadow copies of network shares
-			if (sourceFolderTextBox.Text.StartsWith(@"\\", StringComparison.Ordinal))
-			{
-				vscCheckBox.Checked = false;
-				vscCheckBox.Enabled = false;
-			}
-			else
-				vscCheckBox.Enabled = true;
-
+			excludedItemsButton.Enabled = Directory.Exists(PathHelper.CorrectPath(sourceFolderTextBox.Text));
 			HasChanged = true;
 		}
 
 		private void browseSourceFolderButton_Click(object sender, EventArgs e)
 		{
-			sourceFolderBrowserDialog.SelectedPath = sourceFolderTextBox.Text;
+			sourceFolderBrowserDialog.SelectedPath = PathHelper.CorrectPath(sourceFolderTextBox.Text);
 
 			if (sourceFolderBrowserDialog.ShowDialog(this) == DialogResult.OK)
 			{
@@ -102,12 +92,9 @@ namespace RoboMirror
 		private void excludedItemsButton_Click(object sender, EventArgs e)
 		{
 			if (_excludedItemsDialog == null)
-			{
-				_excludedItemsDialog = new ExcludedItemsDialog(_task,
-					GetFullPath(sourceFolderTextBox.Text));
-			}
+				_excludedItemsDialog = new ExcludedItemsDialog(_task);
 
-			if (_excludedItemsDialog.ShowDialog(this) == DialogResult.Yes)
+			if (_excludedItemsDialog.ShowDialog(this, PathHelper.CorrectPath(sourceFolderTextBox.Text)) == DialogResult.Yes)
 				HasChanged = true;
 			else
 			{
@@ -118,7 +105,7 @@ namespace RoboMirror
 
 		private void browseTargetFolderButton_Click(object sender, EventArgs e)
 		{
-			targetFolderBrowserDialog.SelectedPath = targetFolderTextBox.Text;
+			targetFolderBrowserDialog.SelectedPath = PathHelper.CorrectPath(targetFolderTextBox.Text);
 
 			if (targetFolderBrowserDialog.ShowDialog(this) == DialogResult.OK)
 			{
@@ -151,16 +138,6 @@ namespace RoboMirror
 		}
 
 
-		private static string GetFullPath(string path)
-		{
-			string fullPath = Path.GetFullPath(path);
-			if (fullPath[fullPath.Length - 1] == Path.DirectorySeparatorChar)
-				fullPath = fullPath.Remove(fullPath.Length - 1);
-
-			return fullPath;
-		}
-
-
 		protected override void OnFormClosed(FormClosedEventArgs e)
 		{
 			base.OnFormClosed(e);
@@ -173,7 +150,7 @@ namespace RoboMirror
 		{
 			// check if the changes are valid
 
-			string source = sourceFolderTextBox.Text;
+			string source = PathHelper.CorrectPath(sourceFolderTextBox.Text);
 			if (!Directory.Exists(source))
 			{
 				MessageBox.Show("The source folder does not exist.", "Invalid source folder",
@@ -181,9 +158,8 @@ namespace RoboMirror
 				sourceFolderTextBox.Focus();
 				return false;
 			}
-			source = GetFullPath(source);
 
-			string target = targetFolderTextBox.Text;
+			string target = PathHelper.CorrectPath(targetFolderTextBox.Text);
 			if (!Directory.Exists(target))
 			{
 				MessageBox.Show("The target folder does not exist.", "Invalid target folder",
@@ -191,28 +167,17 @@ namespace RoboMirror
 				targetFolderTextBox.Focus();
 				return false;
 			}
-			target = GetFullPath(target);
 
-			// use a case-insensitive path comparison under Windows
-			var comparison = (Path.DirectorySeparatorChar == '\\' ?
-				StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-
-			if (target.Length >= source.Length &&
-			    string.Compare(target + Path.DirectorySeparatorChar, 0,
-			                   source + Path.DirectorySeparatorChar, 0, source.Length + 1, comparison) == 0)
+			string relativePath;
+			if (PathHelper.IsInFolder(target, source, out relativePath))
 			{
-				MessageBox.Show("The target folder cannot be in the source folder.",
+				MessageBox.Show("The target folder must not be in the source folder.",
 					"Invalid target folder", MessageBoxButtons.OK, MessageBoxIcon.Error);
 				targetFolderTextBox.Focus();
 				return false;
 			}
 
 			// apply the changes
-
-			// reset the last synchronization timestamp if source or target have changed
-			if (string.Compare(_task.Source, source, comparison) != 0 ||
-			    string.Compare(_task.Target, target, comparison) != 0)
-				_task.LastBackup = null;
 
 			_task.Source = source;
 			_task.Target = target;

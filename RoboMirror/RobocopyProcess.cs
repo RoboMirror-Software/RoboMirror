@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 
 namespace RoboMirror
 {
@@ -23,6 +24,12 @@ namespace RoboMirror
 	public sealed class RobocopyProcess : ConsoleProcess
 	{
 		#region Fields.
+
+		// const after construction:
+		string _sourceFolder;
+		string _destinationFolder;
+		string _otherArguments;
+		bool _deleteExtraItems;
 
 		private VolumeShadowCopySession _vscSession;
 
@@ -76,29 +83,12 @@ namespace RoboMirror
 		#endregion
 
 
-		/// <summary>
-		/// Creates a new RobocopyProcess.
-		/// </summary>
 		/// <param name="task">Task to be backed up/restored.</param>
 		/// <param name="reverse">
 		/// Indicates whether source and target are to be swapped, i.e.
 		/// whether this is a restore or backup operation.
 		/// </param>
-		public RobocopyProcess(MirrorTask task, bool reverse) :
-			base(CreateStartInfo(task, reverse))
-		{ }
-
-		#region Static ProcessStartInfo creation.
-
-		/// <summary>
-		/// Returns an appropriate process start info.
-		/// </summary>
-		/// <param name="task">Task to be backed up/restored.</param>
-		/// <param name="reverse">
-		/// Indicates whether source and target are to be swapped, i.e.
-		/// whether this will be a restore or backup operation.
-		/// </param>
-		private static ProcessStartInfo CreateStartInfo(MirrorTask task, bool reverse)
+		public RobocopyProcess(MirrorTask task, bool reverse) : base()
 		{
 			if (task == null)
 				throw new ArgumentNullException("task");
@@ -108,84 +98,86 @@ namespace RoboMirror
 			if (!Directory.Exists(task.Target))
 				throw new InvalidOperationException(string.Format("The target folder \"{0}\" does not exist.", task.Target));
 
-			var startInfo = new ProcessStartInfo();
-
 			// only use the bundled Robocopy version if the system does not ship with one
-			string path = Path.Combine(Environment.SystemDirectory, "Robocopy.exe");
-			if (!File.Exists(path))
+			string exePath = Path.Combine(Environment.SystemDirectory, "Robocopy.exe");
+			if (!File.Exists(exePath))
 			{
-				path = Path.Combine(System.Windows.Forms.Application.StartupPath, @"Tools\Robocopy.exe");
+				exePath = Path.Combine(System.Windows.Forms.Application.StartupPath, @"Tools\Robocopy.exe");
 
-				if (!File.Exists(path))
-					throw new InvalidOperationException(string.Format("\"{0}\" does not exist.", path));
+				if (!File.Exists(exePath))
+					throw new InvalidOperationException(string.Format("\"{0}\" does not exist.", exePath));
 			}
 
-			startInfo.FileName = path;
+			StartInfo.FileName = exePath;
 
-			string source = (reverse ? task.Target : task.Source);
-			string destination = (reverse ? task.Source : task.Target);
+			BuildArguments(task, reverse);
+		}
 
-			var arguments = new System.Text.StringBuilder();
-			arguments.AppendFormat("\"{0}\" \"{1}\" {2}", source, destination,
-				Properties.Settings.Default.RobocopySwitches);
+		/// <summary>
+		/// Builds the command-line arguments for Robocopy (StartInfo.Arguments and
+		/// _sourceFolder, _destinationFolder, _otherArguments and _deleteExtraItems).
+		/// </summary>
+		private void BuildArguments(MirrorTask task, bool reverse)
+		{
+			_sourceFolder = (reverse ? task.Target : task.Source);
+			_destinationFolder = (reverse ? task.Source : task.Target);
+			_deleteExtraItems = task.DeleteExtraItems;
+
+			var otherArgs = new StringBuilder();
+			otherArgs.Append(Properties.Settings.Default.RobocopySwitches);
 
 			// if supported, use restartable mode and fall back to backup mode
 			if (UacHelper.IsRobocopyBackupModeSupported())
-				arguments.Append(" /zb");
+				otherArgs.Append(" /zb");
 
 			if (!string.IsNullOrEmpty(task.ExtendedAttributes))
 			{
-				arguments.Append(" /copy:dat");
-				arguments.Append(task.ExtendedAttributes);
+				otherArgs.Append(" /copy:dat");
+				otherArgs.Append(task.ExtendedAttributes);
 			}
 
 			if (task.DeleteExtraItems)
-				arguments.Append(" /purge");
+				otherArgs.Append(" /purge");
 
 			if (!string.IsNullOrEmpty(task.ExcludedAttributes))
 			{
-				arguments.Append(" /xa:");
-				arguments.Append(task.ExcludedAttributes);
+				otherArgs.Append(" /xa:");
+				otherArgs.Append(task.ExcludedAttributes);
 			}
 
 			if (task.ExcludedFiles.Count > 0)
 			{
-				arguments.Append(" /xf");
+				otherArgs.Append(" /xf");
 				foreach (string file in task.ExcludedFiles)
-				{
-					arguments.Append(" \"");
-
-					// wildcards must not contain any path information
-					if (file[0] == Path.DirectorySeparatorChar)
-						arguments.Append(source);
-
-					arguments.Append(file);
-					arguments.Append('\"');
-				}
+					AppendPathOrWildcard(otherArgs, _sourceFolder, file);
 			}
 
 			if (task.ExcludedFolders.Count > 0)
 			{
-				arguments.Append(" /xd");
+				otherArgs.Append(" /xd");
 				foreach (string folder in task.ExcludedFolders)
-				{
-					arguments.Append(" \"");
-
-					// wildcards must not contain any path information
-					if (folder[0] == Path.DirectorySeparatorChar)
-						arguments.Append(source);
-
-					arguments.Append(folder);
-					arguments.Append('\"');
-				}
+					AppendPathOrWildcard(otherArgs, _sourceFolder, folder);
 			}
 
-			startInfo.Arguments = arguments.ToString();
+			_otherArguments = otherArgs.ToString();
 
-			return startInfo;
+			StartInfo.Arguments = string.Format("{0} {1} {2}", PathHelper.QuotePath(_sourceFolder),
+				PathHelper.QuotePath(_destinationFolder), _otherArguments);
 		}
 
-		#endregion
+		private static void AppendPathOrWildcard(StringBuilder arguments, string folder, string pathOrWildcard)
+		{
+			// paths begin with a directory separator character
+			if (pathOrWildcard[0] == Path.DirectorySeparatorChar)
+				pathOrWildcard = Path.Combine(folder, pathOrWildcard.Substring(1));
+
+			arguments.Append(' ');
+
+			// enforce enclosing double-quotes because if a volume shadow copy is used,
+			// the source volume will be replaced by the mount point which may contain spaces
+			arguments.Append(PathHelper.QuotePath(pathOrWildcard, force: true));
+		}
+
 
 		/// <summary>
 		/// Kills the process if it is currently running and releases all
@@ -243,8 +235,8 @@ namespace RoboMirror
 
 					_transfersCount = int.Parse(filesStats[1]) +
 						int.Parse(foldersStats[1]);
-					_deletionsCount = int.Parse(filesStats[5]) +
-						int.Parse(foldersStats[5]);
+					_deletionsCount = (!_deleteExtraItems ? 0 :
+						int.Parse(filesStats[5]) + int.Parse(foldersStats[5]));
 					_errorsCount = int.Parse(filesStats[4]) +
 						int.Parse(foldersStats[4]);
 
@@ -293,37 +285,7 @@ namespace RoboMirror
 			if (HasStarted)
 				throw new InvalidOperationException("The process has already been started.");
 
-			string arguments = StartInfo.Arguments;
-
-			// parse the source folder from the command-line arguments
-			// it is the first argument and enclosed in quotes
-			int sourceStart = 1;
-			int sourceEnd = arguments.IndexOf('\"', sourceStart);
-			string sourceFolder = arguments.Substring(sourceStart, sourceEnd - sourceStart);
-
-			// the destination folder is the second argument and enclosed in quotes
-			int destinationStart = sourceEnd + 3;
-			int destinationEnd = arguments.IndexOf('\"', destinationStart);
-			string destinationFolder = arguments.Substring(destinationStart,
-				destinationEnd - destinationStart);
-
-			string otherArguments = arguments.Substring(destinationEnd + 2);
-
-			// parse the source volume from the source folder
-			string sourceVolume = Path.GetPathRoot(sourceFolder);
-			if (sourceVolume[sourceVolume.Length - 1] == Path.DirectorySeparatorChar)
-				sourceVolume = sourceVolume.Remove(sourceVolume.Length - 1);
-
-			// replace all occurrences of the source volume in the command-line
-			// arguments (excluding the destination folder) by "VOLUME"
-			// ("C:\bla.log" => "\"VOLUME\"\bla.log", i.e. this results in invalid
-			// paths so there should be no problem replacing the token later by
-			// the mount point)
-			string token = "\"VOLUME\"";
-			StartInfo.Arguments = string.Format("\"{0}\" \"{1}\" {2}",
-				sourceFolder.Replace(sourceVolume, token),
-				destinationFolder,
-				otherArguments.Replace(sourceVolume, token));
+			string sourceVolume = GetSourceVolume();
 
 			// create a session
 			_vscSession = new VolumeShadowCopySession();
@@ -340,9 +302,14 @@ namespace RoboMirror
 		/// </summary>
 		private void VscSession_Ready(object sender, EventArgs e)
 		{
-			// replace the "VOLUME" token by the mount point
-			StartInfo.Arguments =
-				StartInfo.Arguments.Replace("\"VOLUME\"", _vscSession.MountPoint);
+			string sourceVolume = GetSourceVolume();
+
+			// replace all occurrences of the source volume in the command-line
+			// arguments (excluding the destination folder) by the mount point
+			StartInfo.Arguments = string.Format("{0} {1} {2}",
+				PathHelper.QuotePath(_sourceFolder.Replace(sourceVolume, _vscSession.MountPoint)),
+				PathHelper.QuotePath(_destinationFolder),
+				_otherArguments.Replace(sourceVolume, _vscSession.MountPoint));
 
 			// start Robocopy, making sure the shadow copy is deleted
 			// immediately if Robocopy cannot be started
@@ -359,6 +326,15 @@ namespace RoboMirror
 				_vscSession.OnAborted(new TextEventArgs("Robocopy could not be started:\n\n" +
 					exception.Message));
 			}
+		}
+
+		private string GetSourceVolume()
+		{
+			string r = Path.GetPathRoot(_sourceFolder);
+			// remove a trailing directory separator character
+			if (r[r.Length - 1] == Path.DirectorySeparatorChar)
+				r = r.Substring(0, r.Length - 1);
+			return r;
 		}
 
 		#endregion
