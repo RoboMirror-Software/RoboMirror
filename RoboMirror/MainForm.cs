@@ -58,6 +58,9 @@ namespace RoboMirror
 		{
 			label1.Text = string.Format("RoboMirror v{0}\nCopyright (c) Martin Kinkelin",
 				Application.ProductVersion);
+
+			try { System.Diagnostics.Process.Start("http://robomirror.sourceforge.net/"); }
+			catch { }
 		}
 
 
