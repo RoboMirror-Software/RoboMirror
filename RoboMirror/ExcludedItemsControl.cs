@@ -72,7 +72,7 @@ namespace RoboMirror
 				: "Add the wildcard above to the list.\nAll files with a matching name will be excluded from each folder.");
 
 			// add a wildcard by pressing Enter
-			wildcardTextBox.KeyPress += (s, ea) => { if (ea.KeyChar == 13 && wildcardTextBox.Text.Length > 0) addWildcardButton.PerformClick(); };
+			wildcardTextBox.KeyPress += (s, ea) => { if (ea.KeyChar == 13 && wildcardTextBox.TextLength > 0) addWildcardButton.PerformClick(); };
 		}
 
 		protected virtual void OnChanged(EventArgs e)
@@ -194,7 +194,7 @@ namespace RoboMirror
 
 		private void addWildcardButton_Click(object sender, EventArgs e)
 		{
-			if (wildcardTextBox.Text.Length == 0)
+			if (wildcardTextBox.TextLength == 0)
 				return;
 
 			string wildcard = wildcardTextBox.Text;

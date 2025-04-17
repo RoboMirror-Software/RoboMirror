@@ -6,7 +6,7 @@
       <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="RobocopySwitches" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">/e /fft /r:12 /w:5 /tbd /np</Value>
+      <Value Profile="(Default)">/z /e /fft /r:12 /w:5 /tbd /np</Value>
     </Setting>
   </Settings>
 </SettingsFile>

@@ -23,10 +23,6 @@ namespace RoboMirror
 		private ExcludedItemsDialog _excludedItemsDialog;
 
 
-		/// <summary>
-		/// Creates a new dialog.
-		/// </summary>
-		/// <param name="task">Task to be edited.</param>
 		public TaskDialog(MirrorTask task)
 		{
 			if (task == null)
@@ -68,7 +64,14 @@ namespace RoboMirror
 					allRadioButton.Checked = true;
 			}
 
+			overwriteNewerFilesCheckBox.Checked = _task.OverwriteNewerFiles;
 			deleteExtraItemsCheckBox.Checked = _task.DeleteExtraItems;
+
+			if (!string.IsNullOrEmpty(_task.CustomRobocopySwitches))
+			{
+				robocopySwitchesCheckBox.Checked = true;
+				robocopySwitchesTextBox.Text = _task.CustomRobocopySwitches;
+			}
 		}
 
 
@@ -128,6 +131,16 @@ namespace RoboMirror
 
 				b.Checked = false;
 			}
+
+			HasChanged = true;
+		}
+
+		private void robocopySwitchesCheckBox_CheckedChanged(object sender, EventArgs e)
+		{
+			robocopySwitchesTextBox.Enabled = robocopySwitchesCheckBox.Checked;
+
+			if (robocopySwitchesTextBox.Enabled && robocopySwitchesTextBox.TextLength == 0)
+				robocopySwitchesTextBox.Text = Properties.Settings.Default.RobocopySwitches;
 
 			HasChanged = true;
 		}
@@ -202,7 +215,10 @@ namespace RoboMirror
 			else
 				_task.ExtendedAttributes = string.Empty;
 
+			_task.OverwriteNewerFiles = overwriteNewerFilesCheckBox.Checked;
 			_task.DeleteExtraItems = deleteExtraItemsCheckBox.Checked;
+
+			_task.CustomRobocopySwitches = (robocopySwitchesCheckBox.Checked ? robocopySwitchesTextBox.Text : null);
 
 			return true;
 		}

@@ -211,7 +211,7 @@ namespace RoboMirror
 				_process.LineWritten += RealProcess_LineWritten;
 			}
 
-			if (Task.UseVolumeShadowCopy && !_reverse)
+			if (Task.UseVolumeShadowCopy)
 			{
 				_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Preparing...",
 					"The volume shadow copy is being created.", ToolTipIcon.Info);

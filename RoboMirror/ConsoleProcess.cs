@@ -139,10 +139,12 @@ namespace RoboMirror
 		{
 			get
 			{
+				if (_fullOutput != null)
+					return _fullOutput;
+
 				// make sure that accessing the property is thread-safe
 				lock (_syncObject)
 				{
-					// use the cache if possible
 					if (_fullOutput != null)
 						return _fullOutput;
 
@@ -150,11 +152,8 @@ namespace RoboMirror
 					var lines = Output;
 
 					var output = new StringBuilder(32768);
-
 					foreach (string line in lines)
-					{
 						output.AppendLine(line);
-					}
 
 					_fullOutput = output.ToString();
 
@@ -216,27 +215,30 @@ namespace RoboMirror
 		/// </summary>
 		public virtual void Dispose()
 		{
+			if (_isDisposed)
+				return;
+
 			lock (_syncObject)
 			{
-				if (!_isDisposed)
+				if (_isDisposed)
+					return;
+
+				try
 				{
-					try
-					{
-						WrappedProcess.Kill();
-					}
-					catch (System.ComponentModel.Win32Exception)
-					{
-						// the process might just be terminating
-					}
-					catch (InvalidOperationException)
-					{
-						// the process has either not been started or already exited
-					}
-
-					WrappedProcess.Close();
-
-					_isDisposed = true;
+					WrappedProcess.Kill();
 				}
+				catch (System.ComponentModel.Win32Exception)
+				{
+					// the process might just be terminating
+				}
+				catch (InvalidOperationException)
+				{
+					// the process has either not been started or already exited
+				}
+
+				WrappedProcess.Close();
+
+				_isDisposed = true;
 			}
 		}
 

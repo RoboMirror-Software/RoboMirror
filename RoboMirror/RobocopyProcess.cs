@@ -34,7 +34,6 @@ namespace RoboMirror
 		private VolumeShadowCopySession _vscSession;
 
 		private bool _outputIsParsed;
-
 		private int _transfersCount;
 		private int _deletionsCount;
 		private int _errorsCount;
@@ -123,12 +122,28 @@ namespace RoboMirror
 			_destinationFolder = (reverse ? task.Source : task.Target);
 			_deleteExtraItems = task.DeleteExtraItems;
 
-			var otherArgs = new StringBuilder();
-			otherArgs.Append(Properties.Settings.Default.RobocopySwitches);
+			string basicSwitches = string.IsNullOrEmpty(task.CustomRobocopySwitches)
+				? Properties.Settings.Default.RobocopySwitches
+				: task.CustomRobocopySwitches;
 
-			// if supported, use restartable mode and fall back to backup mode
+			// if supported, use Robocopy's backup mode to avoid access denied errors
 			if (UacHelper.IsRobocopyBackupModeSupported())
-				otherArgs.Append(" /zb");
+			{
+				// do the basic switches include restartable mode (/z)?
+				int zIndex = basicSwitches.IndexOf("/z ", StringComparison.OrdinalIgnoreCase);
+				if (zIndex < 0 && basicSwitches.EndsWith("/z", StringComparison.OrdinalIgnoreCase))
+					zIndex = basicSwitches.Length - 2;
+
+				// if so, change /z to /zb to enable restartable mode with backup mode fallback on access denied,
+				// else add /b for normal backup mode
+				if (zIndex >= 0)
+					basicSwitches = basicSwitches.Substring(0, zIndex) + "/zb" + basicSwitches.Substring(zIndex + 2);
+				else
+					basicSwitches += " /b";
+			}
+
+			var otherArgs = new StringBuilder();
+			otherArgs.Append(basicSwitches);
 
 			if (!string.IsNullOrEmpty(task.ExtendedAttributes))
 			{
@@ -138,6 +153,9 @@ namespace RoboMirror
 
 			if (task.DeleteExtraItems)
 				otherArgs.Append(" /purge");
+
+			if (!task.OverwriteNewerFiles)
+				otherArgs.Append(" /xo"); // exclude older files in the source folder
 
 			if (!string.IsNullOrEmpty(task.ExcludedAttributes))
 			{
@@ -199,6 +217,9 @@ namespace RoboMirror
 		/// </summary>
 		private void ParseOutput()
 		{
+			if (_outputIsParsed)
+				return;
+
 			// make sure parsing is thread-safe
 			lock (_syncObject)
 			{

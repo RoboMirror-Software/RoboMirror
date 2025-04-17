@@ -73,11 +73,23 @@ namespace RoboMirror
 		public string ExtendedAttributes { get; set; }
 
 		/// <summary>
+		/// Gets or sets a value indicating whether newer files in the target folder
+		/// are to be overwritten by older ones from the source folder.
+		/// </summary>
+		public bool OverwriteNewerFiles { get; set; }
+
+		/// <summary>
 		/// Gets or sets a value indicating whether extra files and folders in
 		/// the target folder are to be deleted.
 		/// </summary>
 		public bool DeleteExtraItems { get; set; }
 
+
+		/// <summary>
+		/// Gets or sets optional custom Robocopy command-line switches to be used
+		/// instead of the default ones.
+		/// </summary>
+		public string CustomRobocopySwitches { get; set; }
 
 		/// <summary>
 		/// Gets or sets the date and time of the last successful backup operation.
@@ -168,9 +180,20 @@ namespace RoboMirror
 			node.InnerText = (ExtendedAttributes == null ? string.Empty : ExtendedAttributes);
 			taskNode.AppendChild(node);
 
+			node = document.CreateElement("overwriteNewerFiles");
+			node.InnerText = OverwriteNewerFiles.ToString();
+			taskNode.AppendChild(node);
+
 			node = document.CreateElement("deleteExtraItems");
 			node.InnerText = DeleteExtraItems.ToString();
 			taskNode.AppendChild(node);
+
+			if (!string.IsNullOrEmpty(CustomRobocopySwitches))
+			{
+				node = document.CreateElement("customRobocopySwitches");
+				node.InnerText = CustomRobocopySwitches;
+				taskNode.AppendChild(node);
+			}
 
 			if (LastBackup.HasValue)
 			{
@@ -235,9 +258,19 @@ namespace RoboMirror
 			if (node != null)
 				task.ExtendedAttributes = node.InnerText;
 
+			node = taskNode.SelectSingleNode("overwriteNewerFiles");
+			if (node != null)
+				task.OverwriteNewerFiles = bool.Parse(node.InnerText);
+			else // for backwards compatibility:
+				task.OverwriteNewerFiles = true;
+
 			node = taskNode.SelectSingleNode("deleteExtraItems");
 			if (node != null)
 				task.DeleteExtraItems = bool.Parse(node.InnerText);
+
+			node = taskNode.SelectSingleNode("customRobocopySwitches");
+			if (node != null)
+				task.CustomRobocopySwitches = node.InnerText;
 
 			node = taskNode.SelectSingleNode("lastBackup");
 			if (node != null)

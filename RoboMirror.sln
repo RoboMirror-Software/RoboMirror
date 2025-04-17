@@ -6,7 +6,6 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{2A4E41A3-D7F9-4B6F-B01C-C4B7EDEC2E27}"
 	ProjectSection(SolutionItems) = preProject
 		License.txt = License.txt
-		Readme.txt = Readme.txt
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoboMirror", "RoboMirror\RoboMirror.csproj", "{88E5B609-EEDC-4472-A5CD-555507F1B974}"

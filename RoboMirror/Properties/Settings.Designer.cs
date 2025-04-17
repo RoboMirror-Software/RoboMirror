@@ -34,7 +34,7 @@ namespace RoboMirror.Properties {
         
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("/e /fft /r:12 /w:5 /tbd /np")]
+        [global::System.Configuration.DefaultSettingValueAttribute("/z /e /fft /r:12 /w:5 /tbd /np")]
         public string RobocopySwitches {
             get {
                 return ((string)(this["RobocopySwitches"]));

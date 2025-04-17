@@ -47,7 +47,10 @@
 			this.allRadioButton = new System.Windows.Forms.RadioButton();
 			this.noneRadioButton = new System.Windows.Forms.RadioButton();
 			this.deleteExtraItemsCheckBox = new System.Windows.Forms.CheckBox();
+			this.overwriteNewerFilesCheckBox = new System.Windows.Forms.CheckBox();
+			this.robocopySwitchesCheckBox = new System.Windows.Forms.CheckBox();
 			this.groupBox1 = new System.Windows.Forms.GroupBox();
+			this.robocopySwitchesTextBox = new System.Windows.Forms.TextBox();
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox2)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
 			this.groupBox1.SuspendLayout();
@@ -175,9 +178,9 @@
 			this.vscCheckBox.Size = new System.Drawing.Size(170, 19);
 			this.vscCheckBox.TabIndex = 4;
 			this.vscCheckBox.Text = "Use a volume shadow copy";
-			this.toolTip1.SetToolTip(this.vscCheckBox, "Create a volume shadow copy of the source volume during backup.\r\nThis allows to b" +
-        "ackup files which are locked by running processes\r\nbut requires elevated privile" +
-        "ges and Windows Vista or later.");
+			this.toolTip1.SetToolTip(this.vscCheckBox, "Create a shadow copy of the source volume during mirroring.\r\nThis allows to copy " +
+        "files which are locked by running processes\r\nbut requires elevated privileges an" +
+        "d Windows Vista or later.");
 			this.vscCheckBox.UseVisualStyleBackColor = true;
 			this.vscCheckBox.CheckedChanged += new System.EventHandler(this.Control_Changed);
 			// 
@@ -224,15 +227,41 @@
 			// deleteExtraItemsCheckBox
 			// 
 			this.deleteExtraItemsCheckBox.AutoSize = true;
-			this.deleteExtraItemsCheckBox.Location = new System.Drawing.Point(331, 210);
+			this.deleteExtraItemsCheckBox.Location = new System.Drawing.Point(331, 217);
 			this.deleteExtraItemsCheckBox.Name = "deleteExtraItemsCheckBox";
 			this.deleteExtraItemsCheckBox.Size = new System.Drawing.Size(173, 19);
-			this.deleteExtraItemsCheckBox.TabIndex = 9;
+			this.deleteExtraItemsCheckBox.TabIndex = 10;
 			this.deleteExtraItemsCheckBox.Text = "Delete extra files and folders";
 			this.toolTip1.SetToolTip(this.deleteExtraItemsCheckBox, "Delete files and folders in the target folder which do not exist\r\nin the source f" +
         "older.\r\nUse this option if you want an exact copy of the source folder.");
 			this.deleteExtraItemsCheckBox.UseVisualStyleBackColor = true;
 			this.deleteExtraItemsCheckBox.CheckedChanged += new System.EventHandler(this.Control_Changed);
+			// 
+			// overwriteNewerFilesCheckBox
+			// 
+			this.overwriteNewerFilesCheckBox.AutoSize = true;
+			this.overwriteNewerFilesCheckBox.Location = new System.Drawing.Point(331, 191);
+			this.overwriteNewerFilesCheckBox.Name = "overwriteNewerFilesCheckBox";
+			this.overwriteNewerFilesCheckBox.Size = new System.Drawing.Size(136, 19);
+			this.overwriteNewerFilesCheckBox.TabIndex = 9;
+			this.overwriteNewerFilesCheckBox.Text = "Overwrite newer files";
+			this.toolTip1.SetToolTip(this.overwriteNewerFilesCheckBox, "Overwrite newer files in the target folder by older ones from the source folder.\r" +
+        "\nUse this option if you want an exact copy of the source folder.");
+			this.overwriteNewerFilesCheckBox.UseVisualStyleBackColor = true;
+			this.overwriteNewerFilesCheckBox.CheckedChanged += new System.EventHandler(this.Control_Changed);
+			// 
+			// robocopySwitchesCheckBox
+			// 
+			this.robocopySwitchesCheckBox.AutoSize = true;
+			this.robocopySwitchesCheckBox.Location = new System.Drawing.Point(14, 261);
+			this.robocopySwitchesCheckBox.Name = "robocopySwitchesCheckBox";
+			this.robocopySwitchesCheckBox.Size = new System.Drawing.Size(176, 19);
+			this.robocopySwitchesCheckBox.TabIndex = 11;
+			this.robocopySwitchesCheckBox.Text = "Custom Robocopy switches:";
+			this.toolTip1.SetToolTip(this.robocopySwitchesCheckBox, "Customize the basic Robocopy command-line switches for this mirror task.\r\nUse thi" +
+        "s option with care and only if you know what you are doing!");
+			this.robocopySwitchesCheckBox.UseVisualStyleBackColor = true;
+			this.robocopySwitchesCheckBox.CheckedChanged += new System.EventHandler(this.robocopySwitchesCheckBox_CheckedChanged);
 			// 
 			// groupBox1
 			// 
@@ -246,11 +275,26 @@
 			this.groupBox1.TabStop = false;
 			this.groupBox1.Text = "Copy extended NTFS attributes";
 			// 
+			// robocopySwitchesTextBox
+			// 
+			this.robocopySwitchesTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+			this.robocopySwitchesTextBox.Enabled = false;
+			this.robocopySwitchesTextBox.Location = new System.Drawing.Point(196, 259);
+			this.robocopySwitchesTextBox.MaxLength = 1000;
+			this.robocopySwitchesTextBox.Name = "robocopySwitchesTextBox";
+			this.robocopySwitchesTextBox.Size = new System.Drawing.Size(308, 23);
+			this.robocopySwitchesTextBox.TabIndex = 12;
+			this.robocopySwitchesTextBox.TextChanged += new System.EventHandler(this.Control_Changed);
+			// 
 			// TaskDialog
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.ClientSize = new System.Drawing.Size(518, 310);
+			this.ClientSize = new System.Drawing.Size(518, 349);
+			this.Controls.Add(this.robocopySwitchesCheckBox);
+			this.Controls.Add(this.robocopySwitchesTextBox);
+			this.Controls.Add(this.overwriteNewerFilesCheckBox);
 			this.Controls.Add(this.deleteExtraItemsCheckBox);
 			this.Controls.Add(this.groupBox1);
 			this.Controls.Add(this.vscCheckBox);
@@ -279,6 +323,9 @@
 			this.Controls.SetChildIndex(this.vscCheckBox, 0);
 			this.Controls.SetChildIndex(this.groupBox1, 0);
 			this.Controls.SetChildIndex(this.deleteExtraItemsCheckBox, 0);
+			this.Controls.SetChildIndex(this.overwriteNewerFilesCheckBox, 0);
+			this.Controls.SetChildIndex(this.robocopySwitchesTextBox, 0);
+			this.Controls.SetChildIndex(this.robocopySwitchesCheckBox, 0);
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox2)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
 			this.groupBox1.ResumeLayout(false);
@@ -308,6 +355,9 @@
 		private System.Windows.Forms.RadioButton aclsOnlyRadioButton;
 		private System.Windows.Forms.RadioButton noneRadioButton;
 		private System.Windows.Forms.CheckBox deleteExtraItemsCheckBox;
+		private System.Windows.Forms.CheckBox overwriteNewerFilesCheckBox;
+		private System.Windows.Forms.TextBox robocopySwitchesTextBox;
+		private System.Windows.Forms.CheckBox robocopySwitchesCheckBox;
 	}
 }
 
