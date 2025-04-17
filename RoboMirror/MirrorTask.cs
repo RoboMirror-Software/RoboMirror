@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Xml;
 
 namespace RoboMirror
@@ -38,12 +39,20 @@ namespace RoboMirror
 		public bool UseVolumeShadowCopy { get; set; }
 
 		/// <summary>
-		/// Gets the list of subfolders, files and wildcards to be excluded from
-		/// mirroring. The paths are relative to the source folder and should begin
-		/// with a directory separator char; wildcards must not contain any path
-		/// information.
+		/// Gets the list of files to be excluded from mirroring.
+		/// Paths are relative to the source folder and must begin with a
+		/// directory separator char; wildcards must not contain any path
+		/// information and therefore do not begin with a directory separator char.
 		/// </summary>
-		public List<string> Exclusions { get; private set; }
+		public List<string> ExcludedFiles { get; private set; }
+
+		/// <summary>
+		/// Gets the list of subfolders to be excluded from mirroring.
+		/// Paths are relative to the source folder and must begin with a
+		/// directory separator char; wildcards must not contain any path
+		/// information and therefore do not begin with a directory separator char.
+		/// </summary>
+		public List<string> ExcludedFolders { get; private set; }
 
 		/// <summary>
 		/// Gets or sets a string encoding the attributes of files to be excluded
@@ -63,6 +72,12 @@ namespace RoboMirror
 		/// </summary>
 		public string ExtendedAttributes { get; set; }
 
+		/// <summary>
+		/// Gets or sets a value indicating whether extra files and folders in
+		/// the target folder are to be deleted.
+		/// </summary>
+		public bool DeleteExtraItems { get; set; }
+
 
 		/// <summary>
 		/// Gets or sets the date and time of the last successful backup operation.
@@ -78,14 +93,14 @@ namespace RoboMirror
 		public MirrorTask()
 		{
 			Guid = System.Guid.NewGuid().ToString();
-			Exclusions = new List<string>();
+			ExcludedFiles = new List<string>();
+			ExcludedFolders = new List<string>();
 		}
 
 
 		/// <summary>
 		/// Converts the task to an XML representation at the specified XML node.
 		/// </summary>
-		/// <param name="taskNode"></param>
 		public void Serialize(XmlNode taskNode)
 		{
 			if (taskNode == null)
@@ -105,17 +120,37 @@ namespace RoboMirror
 			node.InnerText = UseVolumeShadowCopy.ToString();
 			taskNode.AppendChild(node);
 
-			if (Exclusions.Count > 0)
+			if (ExcludedFiles.Count > 0)
 			{
 				var exclusionsNode = document.CreateElement("exclusions");
 				taskNode.AppendChild(exclusionsNode);
 
-				foreach (string exclusion in Exclusions)
+				foreach (string exclusion in ExcludedFiles)
 				{
 					if (string.IsNullOrEmpty(exclusion))
 						continue;
 
-					node = document.CreateElement("item");
+					node = document.CreateElement("file");
+					node.InnerText = exclusion;
+					exclusionsNode.AppendChild(node);
+				}
+			}
+
+			if (ExcludedFolders.Count > 0)
+			{
+				var exclusionsNode = (XmlElement)taskNode.SelectSingleNode("exclusions");
+				if (exclusionsNode == null)
+				{
+					exclusionsNode = document.CreateElement("exclusions");
+					taskNode.AppendChild(exclusionsNode);
+				}
+
+				foreach (string exclusion in ExcludedFolders)
+				{
+					if (string.IsNullOrEmpty(exclusion))
+						continue;
+
+					node = document.CreateElement("folder");
 					node.InnerText = exclusion;
 					exclusionsNode.AppendChild(node);
 				}
@@ -133,10 +168,15 @@ namespace RoboMirror
 			node.InnerText = (ExtendedAttributes == null ? string.Empty : ExtendedAttributes);
 			taskNode.AppendChild(node);
 
+			node = document.CreateElement("deleteExtraItems");
+			node.InnerText = DeleteExtraItems.ToString();
+			taskNode.AppendChild(node);
+
 			if (LastBackup.HasValue)
 			{
 				node = document.CreateElement("lastBackup");
-				node.InnerText = LastBackup.Value.ToUniversalTime().ToString("u");
+				node.InnerText = LastBackup.Value.ToUniversalTime().ToString("u",
+					System.Globalization.CultureInfo.InvariantCulture);
 				taskNode.AppendChild(node);
 			}
 		}
@@ -144,8 +184,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Recreates a task from the specified XML node.
 		/// </summary>
-		/// <param name="taskNode"></param>
-		/// <returns></returns>
 		public static MirrorTask Deserialize(XmlNode taskNode)
 		{
 			if (taskNode == null)
@@ -166,11 +204,24 @@ namespace RoboMirror
 			node = taskNode.SelectSingleNode("exclusions");
 			if (node != null)
 			{
-				var nodes = node.SelectNodes("item");
-				foreach (XmlNode itemNode in nodes)
+				foreach (XmlElement file in node.SelectNodes("file"))
+					if (!string.IsNullOrEmpty(file.InnerText))
+						task.ExcludedFiles.Add(file.InnerText);
+				foreach (XmlElement folder in node.SelectNodes("folder"))
+					if (!string.IsNullOrEmpty(folder.InnerText))
+						task.ExcludedFolders.Add(folder.InnerText);
+
+				// migrate from RoboMirror format prior to v1.0
+				foreach (XmlElement item in node.SelectNodes("item"))
 				{
-					if (!string.IsNullOrEmpty(itemNode.InnerText))
-						task.Exclusions.Add(itemNode.InnerText);
+					if (string.IsNullOrEmpty(item.InnerText))
+						continue;
+
+					if (item.InnerText[0] == Path.DirectorySeparatorChar &&
+						Directory.Exists(task.Source + item.InnerText))
+						task.ExcludedFolders.Add(item.InnerText);
+					else
+						task.ExcludedFiles.Add(item.InnerText);
 				}
 			}
 
@@ -183,6 +234,10 @@ namespace RoboMirror
 			node = taskNode.SelectSingleNode("extendedAttributes");
 			if (node != null)
 				task.ExtendedAttributes = node.InnerText;
+
+			node = taskNode.SelectSingleNode("deleteExtraItems");
+			if (node != null)
+				task.DeleteExtraItems = bool.Parse(node.InnerText);
 
 			node = taskNode.SelectSingleNode("lastBackup");
 			if (node != null)

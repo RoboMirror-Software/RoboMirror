@@ -6,44 +6,113 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Xml;
 
 namespace RoboMirror
 {
+	#region LogEntry class.
+
 	/// <summary>
-	/// Provides an easy way of writing to the application event log.
-	/// This class is thread-safe.
+	/// Represents a RoboMirror-specific event log entry.
 	/// </summary>
-	public static class Log
+	public class LogEntry : IComparable<LogEntry>
 	{
 		/// <summary>
-		/// Source of the events (displayed in a column in the event viewer).
+		/// Gets the date and time when the entry has been generated.
 		/// </summary>
-		internal const string SOURCE = "RoboMirror";
+		public DateTime TimeStamp { get; set; }
+
+		/// <summary>
+		/// Gets or sets the type of the entry.
+		/// </summary>
+		public EventLogEntryType Type { get; set; }
+
+		/// <summary>
+		/// Gets or sets the message of the entry.
+		/// </summary>
+		public string Message { get; set; }
+
+		/// <summary>
+		/// Gets or sets the data associated with the entry.
+		/// </summary>
+		public string Data { get; set; }
 
 
 		/// <summary>
-		/// Writes an event to the application log.
+		/// Sorts the entries descendingly by their timestamp.
 		/// </summary>
-		/// <param name="type">Type of the event.</param>
-		/// <param name="text">Message of the event.</param>
-		public static void Write(EventLogEntryType type, string text)
+		public int CompareTo(LogEntry other)
 		{
-			// there is a supposed limit of 32766 characters for the text
-			// I get Win32Exceptions when inserting >= 31900 characters on Vista x64 SP1,
-			// therefore let's use a decrementing limit until we succeed
-			for (int limit = 32766; limit > 3; limit -= 1000)
+ 			return other.TimeStamp.CompareTo(TimeStamp);
+		}
+	}
+
+	#endregion
+
+
+	/// <summary>
+	/// Provides an easy way of writing to a XML log.
+	/// This class is thread-safe.
+	/// </summary>
+	public class Log : XmlFileManager
+	{
+		// path to the XML file, relative to the user's AppData folder
+		private static readonly string PATH = Path.Combine("RoboMirror", "Log.xml");
+
+
+		#region Static stuff.
+
+		/// <summary>
+		/// Writes the specified entry to the log.
+		/// </summary>
+		/// <param name="task">Associated mirror task.</param>
+		/// <param name="entry">Entry to be written.</param>
+		public static void WriteEntry(MirrorTask task, EventLogEntryType type,
+			string message, string data)
+		{
+			if (string.IsNullOrEmpty(message))
+				throw new ArgumentNullException("message");
+
+			var entry = new LogEntry()
+			{
+				TimeStamp = DateTime.Now,
+				Type = type,
+				Message = message,
+				Data = data
+			};
+
+			// ~100 attempts with 100 ms delay to open the file for writing
+			for (int i = 0; true; ++i)
 			{
 				try
 				{
-					if (text.Length > limit)
-						text = text.Remove(limit - 3) + "...";
-
-					EventLog.WriteEntry(SOURCE, text, type);
-
+					using (var log = new Log(false))
+					{
+						log.Write(task, entry);
+					}
 					break;
 				}
-				catch (System.ComponentModel.Win32Exception) { }
+				catch (FileLockedException)
+				{
+					if (i >= 100)
+						throw;
+
+					System.Threading.Thread.Sleep(100);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Loads all entries associated with the specified mirror task.
+		/// </summary>
+		public static List<LogEntry> LoadEntries(MirrorTask task)
+		{
+			using (var log = new Log(true))
+			{
+				return log.Load(task);
 			}
 		}
 
@@ -52,58 +121,139 @@ namespace RoboMirror
 		/// Logs a Robocopy run.
 		/// </summary>
 		/// <param name="process">Terminated Robocopy process.</param>
-		/// <param name="source">Path to the source folder.</param>
-		/// <param name="target">Path to the target folder.</param>
-		public static void LogRun(RobocopyProcess process, string source, string target)
+		/// <param name="task">Task associated with the operation.</param>
+		/// <param name="reverse">
+		/// Indicates whether source and target have been swapped, i.e.
+		/// whether this has been a restore or backup operation.
+		/// </param>
+		public static void LogRun(RobocopyProcess process, MirrorTask task, bool reverse)
 		{
 			if (process == null)
 				throw new ArgumentNullException("process");
-			if (string.IsNullOrEmpty(source))
-				throw new ArgumentNullException("source");
-			if (string.IsNullOrEmpty(target))
-				throw new ArgumentNullException("target");
+			if (task == null)
+				throw new ArgumentNullException("task");
+
+			EventLogEntryType type;
+			string messageFormat;
 
 			int exitCode = process.ExitCode;
 
 			if (exitCode == -1)
 			{
-				Write(EventLogEntryType.Warning,
-					string.Format("Mirroring of \"{0}\" to \"{1}\" aborted:\n\n",
-					source, target) + process.FullOutput);
-
-				return;
+				type = EventLogEntryType.Warning;
+				messageFormat = "Mirroring of \"{0}\" to \"{1}\" aborted.";
 			}
-
-			if ((exitCode & 16) != 0)
+			else if ((exitCode & 16) != 0)
 			{
-				Write(EventLogEntryType.Error,
-					string.Format("A fatal error occurred while trying to mirror \"{0}\" to \"{1}\":\n\n",
-					source, target) + process.FullOutput);
-
-				return;
+				type = EventLogEntryType.Error;
+				messageFormat = "A fatal error occurred while trying to mirror \"{0}\" to \"{1}\".";
 			}
-
-			if ((exitCode & 8) != 0)
+			else if ((exitCode & 8) != 0)
 			{
-				Write(EventLogEntryType.Error,
-					string.Format("Some items could not be mirrored from \"{0}\" to \"{1}\":\n\n",
-					source, target) + process.FullOutput);
-
-				return;
+				type = EventLogEntryType.Error;
+				messageFormat = "Some items could not be mirrored from \"{0}\" to \"{1}\".";
 			}
-
-			if (exitCode == 0)
+			else if (exitCode == 0)
 			{
-				Write(EventLogEntryType.Information,
-					string.Format("\"{0}\" and \"{1}\" are already in sync:\n\n",
-					source, target) + process.FullOutput);
-
-				return;
+				type = EventLogEntryType.Information;
+				messageFormat = "\"{0}\" and \"{1}\" are already in sync.";
+			}
+			else
+			{
+				type = EventLogEntryType.Information;
+				messageFormat = "\"{0}\" successfully mirrored to \"{1}\".";
 			}
 
-			Write(EventLogEntryType.Information,
-				string.Format("\"{0}\" successfully mirrored to \"{1}\":\n\n",
-				source, target) + process.FullOutput);
+			string message = string.Format(messageFormat,
+				(reverse ? task.Target : task.Source),
+				(reverse ? task.Source : task.Target));
+
+			WriteEntry(task, type, message, process.FullOutput);
+		}
+
+		#endregion
+
+
+		/// <exception cref="FileLockedException"></exception>
+		private Log(bool readOnly)
+			: base(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), PATH), "log", readOnly)
+		{ }
+
+
+		/// <summary>
+		/// Writes the specified entry to the log.
+		/// </summary>
+		/// <param name="task">Associated mirror task.</param>
+		/// <param name="entry">Entry to be written.</param>
+		public void Write(MirrorTask task, LogEntry entry)
+		{
+			if (task == null)
+				throw new ArgumentNullException("task");
+			if (entry == null)
+				throw new ArgumentNullException("entry");
+
+			var entryNode = Document.CreateElement("entry");
+			Document.DocumentElement.AppendChild(entryNode);
+
+			var attribute = Document.CreateAttribute("taskGuid");
+			attribute.Value = task.Guid;
+			entryNode.Attributes.Append(attribute);
+
+			var node = Document.CreateElement("timeStamp");
+			node.InnerText = entry.TimeStamp.ToUniversalTime().ToString("u");
+			entryNode.AppendChild(node);
+
+			node = Document.CreateElement("type");
+			node.InnerText = entry.Type.ToString();
+			entryNode.AppendChild(node);
+
+			node = Document.CreateElement("message");
+			node.AppendChild(Document.CreateCDataSection(entry.Message));
+			entryNode.AppendChild(node);
+
+			if (!string.IsNullOrEmpty(entry.Data))
+			{
+				node = Document.CreateElement("data");
+				node.AppendChild(Document.CreateCDataSection(entry.Data));
+				entryNode.AppendChild(node);
+			}
+
+			Save();
+		}
+
+		/// <summary>
+		/// Loads all entries associated with the specified mirror task.
+		/// </summary>
+		public List<LogEntry> Load(MirrorTask task)
+		{
+			if (task == null)
+				throw new ArgumentNullException("task");
+
+			var entries = Document.DocumentElement.SelectNodes(
+				string.Format("entry[@taskGuid=\"{0}\"]", task.Guid));
+
+			var list = new List<LogEntry>(entries.Count);
+
+			foreach (XmlNode entry in entries)
+			{
+				var item = new LogEntry();
+				list.Add(item);
+
+				item.TimeStamp = DateTime.ParseExact(entry.SelectSingleNode("timeStamp").InnerText,
+					"u", System.Globalization.CultureInfo.InvariantCulture).ToLocalTime();
+
+				item.Type = (EventLogEntryType)Enum.Parse(typeof(EventLogEntryType), entry.SelectSingleNode("type").InnerText);
+
+				item.Message = entry.SelectSingleNode("message").FirstChild.Value;
+
+				var node = entry.SelectSingleNode("data");
+				if (node != null)
+					item.Data = node.FirstChild.Value;
+			}
+
+			list.Sort();
+
+			return list;
 		}
 	}
 }

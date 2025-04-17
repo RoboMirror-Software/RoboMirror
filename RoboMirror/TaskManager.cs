@@ -7,8 +7,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Xml;
 using System.IO;
+using System.Xml;
 using Microsoft.Win32.TaskScheduler;
 
 namespace RoboMirror
@@ -16,15 +16,10 @@ namespace RoboMirror
 	/// <summary>
 	/// Manages loading tasks from and saving tasks to an XML file.
 	/// </summary>
-	public sealed class TaskManager : IDisposable
+	public sealed class TaskManager : XmlFileManager
 	{
 		// path to the XML file, relative to the user's AppData folder
 		private static readonly string PATH = Path.Combine("RoboMirror", "Tasks.xml");
-
-
-		private FileStream _file;
-		private XmlDocument _document;
-
 
 		/// <summary>
 		/// Creates a new TaskManager.
@@ -33,71 +28,19 @@ namespace RoboMirror
 		/// across multiple RoboMirror instances (e.g., GUI + scheduled task),
 		/// and that there can only be one running GUI instance at a time.
 		/// </summary>
-		/// <param name="readOnly">
-		/// Indicates whether the XML file should be opened in read-only mode,
-		/// allowing to load tasks even if another accessing thread exists.
-		/// </param>
+		/// <exception cref="FileLockedException"></exception>
 		public TaskManager(bool readOnly)
-		{
-			string path = Path.Combine(
-				Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), PATH);
-
-			try
-			{
-				string folder = path.Substring(0, path.LastIndexOf(Path.DirectorySeparatorChar));
-
-				if (!Directory.Exists(folder))
-					Directory.CreateDirectory(folder);
-
-				_file = File.Open(path, FileMode.OpenOrCreate,
-					(readOnly ? FileAccess.Read : FileAccess.ReadWrite),
-					(readOnly ? FileShare.ReadWrite : FileShare.Read));
-			}
-			catch (Exception e)
-			{
-				throw new InvalidOperationException(
-					string.Format("\"{0}\" could not be opened, probably due to another running RoboMirror instance.",
-					path), e);
-			}
-
-			_document = new XmlDocument();
-
-			if (_file.Length > 0)
-			{
-				try
-				{
-					_document.Load(_file);
-				}
-				catch (Exception e)
-				{
-					throw new InvalidOperationException(string.Format("\"{0}\" is corrupt.", path), e);
-				}
-			}
-			else
-			{
-				// create the document element
-				_document.AppendChild(_document.CreateElement("tasks"));
-			}
-		}
-
-		/// <summary>
-		/// Unlocks the XML file.
-		/// </summary>
-		public void Dispose()
-		{
-			_file.Close();
-		}
-
+			: base(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), PATH), "tasks", readOnly)
+		{ }
 
 		/// <summary>
 		/// Loads all tasks from the XML file.
 		/// </summary>
-		/// <returns></returns>
 		public List<MirrorTask> LoadTasks()
 		{
 			var tasks = new List<MirrorTask>();
 
-			var taskNodes = _document.DocumentElement.SelectNodes("task");
+			var taskNodes = Document.DocumentElement.SelectNodes("task");
 
 			foreach (XmlNode node in taskNodes)
 			{
@@ -111,8 +54,6 @@ namespace RoboMirror
 		/// Loads the task with the specified GUID from the XML file or returns
 		/// null if it does not exist.
 		/// </summary>
-		/// <param name="guid"></param>
-		/// <returns></returns>
 		public MirrorTask LoadTask(string guid)
 		{
 			if (string.IsNullOrEmpty(guid))
@@ -127,7 +68,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Saves the specified task to the XML file.
 		/// </summary>
-		/// <param name="task"></param>
 		public void SaveTask(MirrorTask task)
 		{
 			if (task == null)
@@ -142,34 +82,33 @@ namespace RoboMirror
 			}
 			else
 			{
-				node = _document.CreateElement("task");
-				_document.DocumentElement.AppendChild(node);
+				node = Document.CreateElement("task");
+				Document.DocumentElement.AppendChild(node);
 			}
 
 			task.Serialize(node);
 
-			SaveDocument();
+			Save();
 		}
 
 
 		/// <summary>
 		/// Deletes the specified task from the XML file, including the
-		/// first associated scheduled task if it exists.
+		/// associated scheduled task if it exists.
 		/// </summary>
-		/// <param name="task"></param>
 		public void DeleteTask(MirrorTask task)
 		{
 			if (task == null)
 				throw new ArgumentNullException("task");
 
-			var scheduledTask = GetScheduledTask(task);
-			if (scheduledTask != null)
+			try
 			{
-				using (var service = new TaskService())
+				using (var scheduledTasksManager = new ScheduledTasksManager())
 				{
-					service.RootFolder.DeleteTask(scheduledTask.Name);
+					scheduledTasksManager.Delete(task);
 				}
 			}
+			catch { }
 
 			var node = GetTaskNode(task.Guid);
 			if (node == null)
@@ -177,7 +116,7 @@ namespace RoboMirror
 
 			node.ParentNode.RemoveChild(node);
 
-			SaveDocument();
+			Save();
 		}
 
 
@@ -186,62 +125,10 @@ namespace RoboMirror
 		/// if there is no matching node.
 		/// </summary>
 		/// <param name="guid">GUID of the task.</param>
-		/// <returns></returns>
 		private XmlNode GetTaskNode(string guid)
 		{
-			return _document.DocumentElement.SelectSingleNode(
+			return Document.DocumentElement.SelectSingleNode(
 				string.Format("task[@guid=\"{0}\"]", guid));
-		}
-
-		/// <summary>
-		/// Saves the current XML document to disk.
-		/// </summary>
-		private void SaveDocument()
-		{
-			if (!_file.CanWrite)
-				throw new InvalidOperationException("A read-only task manager cannot modify the XML file.");
-
-			// reset the stream
-			_file.Position = 0;
-			_file.SetLength(0);
-
-			// save to the stream
-			_document.Save(_file);
-
-			// save to disk
-			_file.Flush();
-		}
-
-
-		/// <summary>
-		/// Gets the first scheduled task associated with the specified mirror task.
-		/// Returns null if there is no associated scheduled task.
-		/// </summary>
-		/// <param name="mirrorTask"></param>
-		/// <returns></returns>
-		public static Task GetScheduledTask(MirrorTask mirrorTask)
-		{
-			if (mirrorTask == null)
-				throw new ArgumentNullException("mirrorTask");
-
-			using (var service = new TaskService())
-			{
-				foreach (var task in service.RootFolder.Tasks)
-				{
-					if (task.Definition.Actions.Count != 1)
-						continue;
-
-					var execAction = task.Definition.Actions[0] as ExecAction;
-					if (execAction != null &&
-						string.Compare(execAction.Path, System.Windows.Forms.Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) == 0 &&
-						execAction.Arguments == mirrorTask.Guid)
-					{
-						return task;
-					}
-				}
-			}
-
-			return null;
 		}
 	}
 }

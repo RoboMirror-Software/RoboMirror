@@ -194,17 +194,8 @@ namespace RoboMirror
 		#endregion
 
 
-		/// <summary>
-		/// Creates a new ConsoleProcess.
-		/// </summary>
-		public ConsoleProcess() :
-			this(null)
-		{
-		}
+		public ConsoleProcess() : this(null) { }
 
-		/// <summary>
-		/// Creates a new ConsoleProcess and sets the specified start info.
-		/// </summary>
 		/// <param name="startInfo">
 		/// Optional start info for the new process.
 		/// Some properties regarding stdout and stderr will be overwritten.
@@ -251,7 +242,7 @@ namespace RoboMirror
 
 
 		/// <summary>
-		/// Sets the process up so that it is compatible with this class.
+		/// Sets up the process so that it is compatible with this class.
 		/// </summary>
 		private void SetupProcess()
 		{
@@ -266,9 +257,9 @@ namespace RoboMirror
 			StartInfo.StandardOutputEncoding = StartInfo.StandardErrorEncoding =
 				Encoding.GetEncoding(Thread.CurrentThread.CurrentCulture.TextInfo.OEMCodePage);
 
-			WrappedProcess.OutputDataReceived += new DataReceivedEventHandler(Process_DataReceived);
-			WrappedProcess.ErrorDataReceived += new DataReceivedEventHandler(Process_DataReceived);
-			WrappedProcess.Exited += new EventHandler(Process_Exited);
+			WrappedProcess.OutputDataReceived += Process_DataReceived;
+			WrappedProcess.ErrorDataReceived += Process_DataReceived;
+			WrappedProcess.Exited += Process_Exited;
 
 			// enable the exited event
 			WrappedProcess.EnableRaisingEvents = true;
@@ -322,8 +313,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked asynchronously when the process has written a line to stdout or stderr.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void Process_DataReceived(object sender, DataReceivedEventArgs e)
 		{
 			if (e.Data == null)
@@ -340,8 +329,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked asynchronously when the process has exited.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void Process_Exited(object sender, EventArgs e)
 		{
 			OnExited(e);
@@ -351,7 +338,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked when the process has started.
 		/// </summary>
-		/// <param name="e"></param>
 		protected virtual void OnStarted(EventArgs e)
 		{
 			SmartEventInvoker.FireEvent(Started, this, e);
@@ -360,7 +346,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked asynchronously when the process has written a line to stdout or stderr.
 		/// </summary>
-		/// <param name="e"></param>
 		protected virtual void OnLineWritten(DataReceivedEventArgs e)
 		{
 			SmartEventInvoker.FireEvent(LineWritten, this, e);
@@ -369,7 +354,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked asynchronously when the process has exited.
 		/// </summary>
-		/// <param name="e"></param>
 		protected virtual void OnExited(EventArgs e)
 		{
 			SmartEventInvoker.FireEvent(Exited, this, e);

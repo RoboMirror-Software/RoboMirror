@@ -10,25 +10,47 @@ using System.Windows.Forms;
 
 namespace RoboMirror
 {
+	#region FinishedEventArgs class.
+
+	/// <summary>
+	/// EventArgs derivate for the MirrorOperation's Finished event.
+	/// </summary>
+	public class FinishedEventArgs : EventArgs
+	{
+		/// <summary>
+		/// Gets a value indicating whether the operation was successful,
+		/// i.e. whether both folders have already been in sync or the
+		/// destination folder has been synchronized successfully.
+		/// </summary>
+		public bool Success { get; private set; }
+
+
+		/// <summary>
+		/// Creates a new FinishedEventArgs.
+		/// </summary>
+		public FinishedEventArgs(bool success)
+		{
+			Success = success;
+		}
+	}
+
+	#endregion
+
+
 	/// <summary>
 	/// Encapsulates a backup or restore operation.
 	/// It provides some minimal GUI through a task tray icon and manages
 	/// output logging and error handling.
 	/// It is designed as Control only because it offers a neat synchronization
 	/// mechanism in combination with the SmartEventInvoker: the local event
-	/// handlers are invoked in the thread which created the
-	/// MirrorOperation instance. This allows for a single shared GUI thread.
+	/// handlers are invoked in the thread which created the MirrorOperation
+	/// instance. This allows for a single shared GUI thread.
 	/// </summary>
 	public sealed class MirrorOperation : Control
 	{
 		// number of milliseconds after which a balloon tip will fade out
 		// automatically
-		private static int BALLOON_TIMEOUT = 10000;
-
-		// number of milliseconds after which a completed operation finishes
-		// this time may be used by the user to view the log
-		private static int OPERATION_DELAY = 60000;
-
+		private const int BALLOON_TIMEOUT = 10000;
 
 		#region Fields.
 
@@ -47,9 +69,6 @@ namespace RoboMirror
 		// tray icon
 		private NotifyIcon _icon;
 
-		// timer used to finish the operation after a delay
-		private Timer _timer;
-
 		#endregion
 
 
@@ -60,18 +79,11 @@ namespace RoboMirror
 
 
 		/// <summary>
-		/// Fired either if the folders have already been in sync or when the
-		/// destination folder has been synchronized successfully.
-		/// If a backup has been performed, the LastBackup property of the
-		/// associated task has been updated.
+		/// Fired when the operation has finished.
+		/// If a backup has been completed successfully, the LastBackup
+		/// property of the associated task has been updated.
 		/// </summary>
-		public event EventHandler Succeeded;
-
-		/// <summary>
-		/// Fired when the operation has finished and the application may be
-		/// closed.
-		/// </summary>
-		public event EventHandler Finished;
+		public event EventHandler<FinishedEventArgs> Finished;
 
 
 		/// <summary>
@@ -123,21 +135,20 @@ namespace RoboMirror
 		/// </param>
 		protected override void Dispose(bool disposing)
 		{
-			if (_process != null)
+			if (disposing)
 			{
-				_process.Dispose();
-				_process = null;
-			}
+				if (_process != null)
+				{
+					_process.Dispose();
+					_process = null;
+				}
 
-			if (disposing && _icon != null)
-			{
-				if (_timer != null)
-					_timer.Dispose();
-
-				_icon.ContextMenuStrip.Dispose();
-				_icon.Dispose();
-
-				_icon = null;
+				if (_icon != null)
+				{
+					_icon.ContextMenuStrip.Dispose();
+					_icon.Dispose();
+					_icon = null;
+				}
 			}
 
 			base.Dispose(disposing);
@@ -168,8 +179,8 @@ namespace RoboMirror
 				{
 					_process.WrappedProcess.StartInfo.Arguments += " /l";
 
-					_process.Started += new EventHandler(SimulationProcess_Started);
-					_process.Exited += new EventHandler(SimulationProcess_Exited);
+					_process.Started += SimulationProcess_Started;
+					_process.Exited += SimulationProcess_Exited;
 
 					_process.Start();
 				}
@@ -178,10 +189,9 @@ namespace RoboMirror
 			}
 			catch (Exception e)
 			{
-				MessageBox.Show(e.Message, "Robocopy cannot be started",
-					MessageBoxButtons.OK, MessageBoxIcon.Error);
+				MessageBox.Show(e.Message, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-				OnFinished(EventArgs.Empty);
+				OnFinished(new FinishedEventArgs(false));
 			}
 		}
 
@@ -192,14 +202,13 @@ namespace RoboMirror
 		/// </summary>
 		private void StartRealProcess()
 		{
-			_process.Started += new EventHandler(RealProcess_Started);
-			_process.Exited += new EventHandler(RealProcess_Exited);
+			_process.Started += RealProcess_Started;
+			_process.Exited += RealProcess_Exited;
 
 			// keep track of the progress if a simulation has been performed first
 			if (_expectedOutputLinesCount > 0)
 			{
-				_process.LineWritten +=
-					new EventHandler<System.Diagnostics.DataReceivedEventArgs>(RealProcess_LineWritten);
+				_process.LineWritten += RealProcess_LineWritten;
 			}
 
 			if (Task.UseVolumeShadowCopy && !_reverse)
@@ -219,8 +228,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked when a simulation process has been started.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void SimulationProcess_Started(object sender, EventArgs e)
 		{
 			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Analyzing...",
@@ -232,8 +239,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked when a simulation process has exited.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void SimulationProcess_Exited(object sender, EventArgs e)
 		{
 			EnableAborting(false);
@@ -244,13 +249,7 @@ namespace RoboMirror
 			// started normally
 			if (exitCode == -1 || (exitCode & 16) != 0)
 			{
-				OnFinished(EventArgs.Empty);
-				return;
-			}
-
-			if (exitCode == 0)
-			{
-				OnAlreadyInSync();
+				OnFinished(new FinishedEventArgs(false));
 				return;
 			}
 
@@ -259,13 +258,14 @@ namespace RoboMirror
 			{
 				if (dialog.ShowDialog() != DialogResult.OK)
 				{
-					OnFinished(EventArgs.Empty);
+					OnFinished(new FinishedEventArgs(false));
 					return;
 				}
 			}
 
 			_expectedOutputLinesCount = _process.Output.Count;
 			_process.Dispose();
+			_process = null;
 
 			try
 			{
@@ -275,10 +275,9 @@ namespace RoboMirror
 			}
 			catch (Exception exception)
 			{
-				MessageBox.Show(exception.Message, "Robocopy cannot be started",
-					MessageBoxButtons.OK, MessageBoxIcon.Error);
+				MessageBox.Show(exception.Message, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-				OnFinished(EventArgs.Empty);
+				OnFinished(new FinishedEventArgs(false));
 			}
 		}
 
@@ -286,8 +285,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked when a real (non-simulation) process has been started.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void RealProcess_Started(object sender, EventArgs e)
 		{
 			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Mirroring...",
@@ -300,8 +297,6 @@ namespace RoboMirror
 		/// Invoked when a real (non-simulation) process has written a
 		/// line to stdout or stderr.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void RealProcess_LineWritten(object sender, System.Diagnostics.DataReceivedEventArgs e)
 		{
 			_currentOutputLinesCount++;
@@ -320,45 +315,19 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked when a real (non-simulation) process has exited.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void RealProcess_Exited(object sender, EventArgs e)
 		{
 			EnableAborting(false);
 
 			_icon.Text = "RoboMirrored";
 
-			Log.LogRun(_process, _source, _destination);
+			Log.LogRun(_process, Task, _reverse);
 
 			int exitCode = CheckExitCode();
 
-			// could the process be started normally?
-			if (exitCode == -1 || (exitCode & 16) == 0)
-			{
-				// show a summary balloon tip
+			bool success = (exitCode != -1 && (exitCode & 16) == 0 && (exitCode & 8) == 0);
 
-				if (exitCode == 0)
-				{
-					OnAlreadyInSync();
-				}
-				else if (exitCode == -1)
-				{
-					OnSynchronized(ToolTipIcon.Warning, "Mirroring aborted",
-						"Click here to view the log.");
-				}
-				else if ((exitCode & 8) != 0)
-				{
-					OnSynchronized(ToolTipIcon.Error, "Mirroring incomplete",
-						"Some items could not be copied. Click here to view the log.");
-				}
-				else
-				{
-					OnSynchronized(ToolTipIcon.Info, "Mirroring complete",
-						"Click here to view the log.");
-				}
-			}
-			else
-				OnFinished(EventArgs.Empty);
+			OnFinished(new FinishedEventArgs(success));
 		}
 
 		#endregion
@@ -368,21 +337,25 @@ namespace RoboMirror
 		/// Invoked if the volume shadow copy could not be created/mounted
 		/// or if the embedded Robocopy process could not be started.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void VscSession_Aborted(object sender, TextEventArgs e)
 		{
-			MessageBox.Show(e.Text, "Volume shadow copy cannot be created",
-				MessageBoxButtons.OK, MessageBoxIcon.Error);
+			MessageBox.Show(e.Text, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-			OnFinished(EventArgs.Empty);
+			OnFinished(new FinishedEventArgs(false));
+		}
+
+		/// <summary>
+		/// Invoked when the user clicks on the abort context menu item.
+		/// </summary>
+		private void AbortToolStripItem_Clicked(object sender, EventArgs e)
+		{
+			Abort();
 		}
 
 
 		/// <summary>
 		/// Enables or disables the abort context menu item.
 		/// </summary>
-		/// <param name="enable"></param>
 		private void EnableAborting(bool enable)
 		{
 			_icon.ContextMenuStrip.Items[1].Enabled = enable;
@@ -401,7 +374,7 @@ namespace RoboMirror
 			// ask the user for confirmation and check if the process has
 			// exited in the meantime
 			if (MessageBox.Show(string.Format("Are you sure you want to abort mirroring to \"{0}\"?", _destination),
-				"Confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) !=
+				"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) !=
 				DialogResult.Yes || _process.HasExited)
 			{
 				return false;
@@ -422,14 +395,28 @@ namespace RoboMirror
 		{
 			int exitCode = _process.ExitCode;
 
-			if (exitCode != -1 && (exitCode & 16) != 0)
+			if (exitCode != -1)
 			{
-				if (MessageBox.Show("Robocopy has terminated unexpectedly.\nWould you like to view the log?",
-					"Error", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes)
+				if ((exitCode & 16) != 0)
 				{
-					using (var form = new LogForm("Robocopy log", _process.FullOutput))
+					if (MessageBox.Show("A fatal Robocopy error has occurred.\nWould you like to view the log?",
+						"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes)
 					{
-						form.ShowDialog();
+						using (var form = new LogForm("Robocopy log", _process.FullOutput))
+						{
+							form.ShowDialog();
+						}
+					}
+				}
+				else if ((exitCode & 8) != 0)
+				{
+					if (MessageBox.Show("Some files could not be copied.\nWould you like to view the log?",
+						"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+					{
+						using (var form = new LogForm("Robocopy log", _process.FullOutput))
+						{
+							form.ShowDialog();
+						}
 					}
 				}
 			}
@@ -439,134 +426,17 @@ namespace RoboMirror
 
 
 		/// <summary>
-		/// Invoked if the folders have already been in sync.
-		/// </summary>
-		private void OnAlreadyInSync()
-		{
-			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Mirroring complete",
-				"The folders are already in sync.", ToolTipIcon.Info);
-
-			OnCompleted(true);
-		}
-
-		/// <summary>
-		/// Invoked when the destination folder has been synchronized,
-		/// at least partially.
-		/// </summary>
-		/// <param name="icon">Icon of the balloon tip.</param>
-		/// <param name="title">Title of the balloon tip.</param>
-		/// <param name="text">Text of the balloon tip.</param>
-		private void OnSynchronized(ToolTipIcon icon, string title, string text)
-		{
-			_icon.ShowBalloonTip(BALLOON_TIMEOUT, title, text, icon);
-
-			_icon.BalloonTipClicked += new EventHandler(ViewLogToolStripItem_Clicked);
-
-			OnCompleted(icon == ToolTipIcon.Info);
-		}
-
-		/// <summary>
-		/// Invoked either if the folders have already been in sync or when
-		/// the destination folder has been synchronized, at least partially.
-		/// </summary>
-		/// <param name="success">Indicates if the operation was successful.</param>
-		private void OnCompleted(bool success)
-		{
-			_icon.Text = "RoboMirrored";
-
-			_icon.ContextMenuStrip.Items.RemoveAt(1);
-			_icon.ContextMenuStrip.Items.Add("View log", Properties.Resources.text,
-				ViewLogToolStripItem_Clicked);
-			_icon.ContextMenuStrip.Items.Add("Close", Properties.Resources.delete,
-				CloseToolStripItem_Clicked);
-
-			// use a timer to finish the operation
-			if (OPERATION_DELAY > 0)
-			{
-				_timer = new Timer();
-				_timer.Interval = OPERATION_DELAY;
-				_timer.Tick += new EventHandler(Timer_Tick);
-				_timer.Start();
-			}
-
-			if (success)
-				OnSucceeded(EventArgs.Empty);
-		}
-
-		/// <summary>
-		/// Invoked when the operation has been completed successfully.
-		/// It is not yet finished though because the user is given some
-		/// time to view the log.
-		/// </summary>
-		/// <param name="e"></param>
-		private void OnSucceeded(EventArgs e)
-		{
-			// update the last backup timestamp
-			if (!_reverse)
-				Task.LastBackup = DateTime.Now;
-
-			if (Succeeded != null)
-				Succeeded(this, e);
-		}
-
-		/// <summary>
 		/// Fires the Finished event after disposing of the operation.
 		/// </summary>
-		/// <param name="e"></param>
-		private void OnFinished(EventArgs e)
+		private void OnFinished(FinishedEventArgs e)
 		{
+			if (e.Success && !_reverse)
+				Task.LastBackup = DateTime.Now;
+
 			Dispose();
 
 			if (Finished != null)
 				Finished(this, e);
-		}
-
-
-		/// <summary>
-		/// Invoked when the user clicks on the abort context menu item.
-		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
-		private void AbortToolStripItem_Clicked(object sender, EventArgs e)
-		{
-			Abort();
-		}
-
-		/// <summary>
-		/// Invoked when the user clicks on the view log context menu item.
-		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
-		private void ViewLogToolStripItem_Clicked(object sender, EventArgs e)
-		{
-			using (var form = new LogForm("Robocopy log", _process.FullOutput))
-			{
-				_icon.Visible = false;
-				form.ShowDialog();
-			}
-
-			OnFinished(EventArgs.Empty);
-		}
-
-		/// <summary>
-		/// Invoked when the user clicks on the close context menu item.
-		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
-		private void CloseToolStripItem_Clicked(object sender, EventArgs e)
-		{
-			OnFinished(EventArgs.Empty);
-		}
-
-
-		/// <summary>
-		/// Invoked when the summary balloon tip has faded out automatically.
-		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
-		private void Timer_Tick(object sender, EventArgs e)
-		{
-			OnFinished(EventArgs.Empty);
 		}
 	}
 }

@@ -36,19 +36,29 @@ namespace RoboMirror
 
 			InitializeComponent();
 
+			var boldFont = new System.Drawing.Font(Font, System.Drawing.FontStyle.Bold);
+			sourceLabel.Font = boldFont;
+			targetLabel.Font = boldFont;
+
+			var sourceFileDropTargetWrapper = new FileDropTargetWrapper(sourceFolderTextBox, FileDropMode.Folder);
+			sourceFileDropTargetWrapper.FilesDropped += (s, e) => { sourceFolderTextBox.Text = e.Paths[0]; };
+
+			var targetFileDropTargetWrapper = new FileDropTargetWrapper(targetFolderTextBox, FileDropMode.Folder);
+			targetFileDropTargetWrapper.FilesDropped += (s, e) => { targetFolderTextBox.Text = e.Paths[0]; };
+
 			// set up the source
 			if (!string.IsNullOrEmpty(_task.Source))
 				sourceFolderTextBox.Text = _task.Source;
-
-			// set up the target
-			if (!string.IsNullOrEmpty(_task.Target))
-				targetFolderTextBox.Text = _task.Target;
 
 			// persistent volume shadow copies are supported since Windows Vista
 			if (Environment.OSVersion.Version.Major < 6)
 				vscCheckBox.Enabled = false;
 			else
 				vscCheckBox.Checked = _task.UseVolumeShadowCopy;
+
+			// set up the target
+			if (!string.IsNullOrEmpty(_task.Target))
+				targetFolderTextBox.Text = _task.Target;
 
 			if (!string.IsNullOrEmpty(_task.ExtendedAttributes))
 			{
@@ -57,6 +67,8 @@ namespace RoboMirror
 				else if (_task.ExtendedAttributes.Length == 3)
 					allRadioButton.Checked = true;
 			}
+
+			deleteExtraItemsCheckBox.Checked = _task.DeleteExtraItems;
 		}
 
 
@@ -187,7 +199,7 @@ namespace RoboMirror
 
 			if (target.Length >= source.Length &&
 			    string.Compare(target + Path.DirectorySeparatorChar, 0,
-						source + Path.DirectorySeparatorChar, 0, source.Length + 1, comparison) == 0)
+			                   source + Path.DirectorySeparatorChar, 0, source.Length + 1, comparison) == 0)
 			{
 				MessageBox.Show("The target folder cannot be in the source folder.",
 					"Invalid target folder", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -207,8 +219,11 @@ namespace RoboMirror
 
 			if (_excludedItemsDialog != null)
 			{
-				_task.Exclusions.Clear();
-				_task.Exclusions.AddRange(_excludedItemsDialog.ExcludedItems);
+				_task.ExcludedFiles.Clear();
+				_task.ExcludedFiles.AddRange(_excludedItemsDialog.ExcludedFiles);
+
+				_task.ExcludedFolders.Clear();
+				_task.ExcludedFolders.AddRange(_excludedItemsDialog.ExcludedFolders);
 
 				_task.ExcludedAttributes = _excludedItemsDialog.ExcludedAttributes;
 			}
@@ -221,6 +236,8 @@ namespace RoboMirror
 				_task.ExtendedAttributes = "S";
 			else
 				_task.ExtendedAttributes = string.Empty;
+
+			_task.DeleteExtraItems = deleteExtraItemsCheckBox.Checked;
 
 			return true;
 		}

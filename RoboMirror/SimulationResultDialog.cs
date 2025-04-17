@@ -28,6 +28,10 @@ namespace RoboMirror
 
 			InitializeComponent();
 
+			var boldFont = new System.Drawing.Font(Font, System.Drawing.FontStyle.Bold);
+			numFilesTransferredLabel.Font = boldFont;
+			numDeletionsLabel.Font = boldFont;
+
 			label1.Text = string.Format(label1.Text, destination);
 
 			numFilesTransferredLabel.Text = process.TransfersCount.ToString();
@@ -46,6 +50,9 @@ namespace RoboMirror
 			// scroll to the end
 			richTextBox1.Select(richTextBox1.Text.Length, 0);
 			richTextBox1.ScrollToCaret();
+
+			// put focus away from text box
+			label1.Focus();
 
 			base.OnShown(e);
 		}

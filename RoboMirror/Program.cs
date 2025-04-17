@@ -19,25 +19,17 @@ namespace RoboMirror
 		[STAThread]
 		static void Main()
 		{
-			AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(UnhandledExceptionHandler);
+			AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+			Application.ThreadException += OnThreadException;
 
 			Application.EnableVisualStyles();
 			Application.SetCompatibleTextRenderingDefault(false);
-
-			if (!EnsureEventSourceExists())
-				return;
 
 			var args = Environment.GetCommandLineArgs();
 
 			if (args.Length == 2)
 			{
-				// exit immediately if the -i switch has been specified
-				// (this is only used to create the event source)
-				if (args[1] == "-i")
-					return;
-
-				// the argument is most likely a GUID of a scheduled
-				// task to be backed up
+				// the argument is most likely a GUID of a task scheduled for backup
 				ScheduledBackupExecutor executor;
 
 				try
@@ -46,8 +38,8 @@ namespace RoboMirror
 				}
 				catch (InvalidOperationException e)
 				{
-					Log.Write(EventLogEntryType.Error,
-						"A scheduled backup task could not be loaded:\n\n" + e.Message);
+					MessageBox.Show("A scheduled backup task could not be initiated:\n\n" + e.Message,
+						"RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
 					return;
 				}
@@ -62,9 +54,9 @@ namespace RoboMirror
 				{
 					form = new MainForm();
 				}
-				catch (InvalidOperationException e)
+				catch (FileLockedException)
 				{
-					MessageBox.Show(e.Message, "RoboMirror cannot be started",
+					MessageBox.Show("Another RoboMirror instance is currently running.", "RoboMirror cannot be started",
 						MessageBoxButtons.OK, MessageBoxIcon.Error);
 
 					return;
@@ -75,86 +67,34 @@ namespace RoboMirror
 		}
 
 		/// <summary>
-		/// Invoked when an exception has not been caught.
+		/// Invoked when an exception in a UI thread has not been caught.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
-		private static void UnhandledExceptionHandler(object sender, UnhandledExceptionEventArgs e)
+		private static void OnThreadException(object sender, System.Threading.ThreadExceptionEventArgs e)
 		{
-			var exception = e.ExceptionObject as Exception;
-
-			if (exception != null)
-			{
-				// make sure no exception can be thrown in this delicate handler
-				try
-				{
-					Log.Write(EventLogEntryType.Error,
-						"An unexpected exception has occurred:\n\n" + exception.ToString());
-				}
-				catch { }
-
-				MessageBox.Show("Oops, an unexpected error has occurred.\nDetails may be found in the application event log.",
-					"Unexpected RoboMirror error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
+			ShowUnhandledExceptionMessageBox(e.Exception);
+			Application.Exit();
 		}
 
 		/// <summary>
-		/// Makes sure the event source for the application event log exists.
-		/// This may involve launching a new admin process and a UAC popup.
+		/// Invoked when an exception in a non-UI thread has not been caught.
 		/// </summary>
-		/// <returns>
-		/// True if the event source exists, false if the user refused to
-		/// grant us the admin rights.
-		/// </returns>
-		private static bool EnsureEventSourceExists()
+		private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
 		{
-			// we need to make sure our event source exists
-			// if it doesn't, we usually end up with a security exception
-			// (due to the security log) and need to create it using admin
-			// privileges (UAC popup)
+			ShowUnhandledExceptionMessageBox(e.ExceptionObject);
+			// application will be terminated
+		}
+
+		private static void ShowUnhandledExceptionMessageBox(object e)
+		{
 			try
 			{
-				if (!EventLog.SourceExists(Log.SOURCE))
-					EventLog.CreateEventSource(Log.SOURCE, null);
+				var exception = e as Exception;
+				string msg = "Oops, an unexpected error has occurred:\n\n" +
+					(exception != null ? exception.ToString() : e.GetType().FullName);
+
+				MessageBox.Show(msg, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
-			catch (System.Security.SecurityException)
-			{
-				// we need admin privileges
-				// launch a new admin process using the -i switch
-				// the process will create the event source and exit immediately
-				var startInfo = new ProcessStartInfo();
-				startInfo.FileName = Application.ExecutablePath;
-				startInfo.Arguments = "-i";
-				startInfo.Verb = "runas"; // this causes the process to require admin rights
-
-				// loop until the user cancels or the admin process has exited
-				while (true)
-				{
-					if (MessageBox.Show("RoboMirror needs admin privileges to create an event source for the application event log.\n" +
-						"Press cancel to terminate RoboMirror.",
-						"RoboMirror is going to cause a UAC popup", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) ==
-						DialogResult.Cancel)
-					{
-						return false;
-					}
-
-					try
-					{
-						using (var adminProcess = Process.Start(startInfo))
-						{
-							adminProcess.WaitForExit();
-						}
-
-						break;
-					}
-					catch (System.ComponentModel.Win32Exception)
-					{
-						// the user refused to grant us the admin rights
-					}
-				}
-			}
-
-			return true;
+			catch {}
 		}
 	}
 }
