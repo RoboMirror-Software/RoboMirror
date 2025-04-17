@@ -7,24 +7,18 @@
 
 using System;
 using System.IO;
+using System.Threading;
+using Alphaleonis.Win32.Vss;
 
 namespace RoboMirror
 {
-	#region TextEventArgs class.
+	#region TextEventArgs class
 
-	/// <summary>
-	/// Augments the EventArgs class by a Text property.
-	/// </summary>
+	/// <summary>Extends the EventArgs class by a read-only Text property.</summary>
 	public class TextEventArgs : EventArgs
 	{
-		/// <summary>
-		/// Gets the associated text.
-		/// </summary>
 		public string Text { get; private set; }
 
-		/// <summary>
-		/// Creates a new TextEventArgs with the specified text.
-		/// </summary>
 		public TextEventArgs(string text)
 		{
 			Text = (text == null ? string.Empty : text);
@@ -33,251 +27,258 @@ namespace RoboMirror
 
 	#endregion
 
-
 	/// <summary>
-	/// Provides a session during which a persistent volume shadow copy
-	/// may be accessed.
+	/// Provides an asynchronous session during which a new,
+	/// non-persistent volume shadow copy snapshot may be accessed.
+	/// This class is thread-safe.
 	/// </summary>
 	public sealed class VolumeShadowCopySession : IDisposable
 	{
-		private static string _vshadowPath;
-
-		private ConsoleProcess _process;
-
-		// synchronize disposing because it may involve starting another
-		// process, therefore it must be disposed only once, even
-		// across multiple threads
 		private readonly object _syncObject = new object();
+		private VscThread _thread;
+		private volatile string _mountPoint; // set and reset in a dedicated _thread
 
 
 		/// <summary>
-		/// Gets or sets the ID of the shadow copy snapshot.
+		/// Gets the path to the source folder of the shadow copy snapshot.
+		/// Will only be set after the session has been started.
 		/// </summary>
-		private string SnapshotID { get; set; }
+		public string SourceFolder { get; private set; }
 
 		/// <summary>
 		/// Gets the path to the mount point of the shadow copy snapshot.
+		/// Will only be set right before firing the Ready event.
 		/// </summary>
-		public string MountPoint { get; private set; }
+		public string MountPoint { get { return _mountPoint; } }
 
 
 		/// <summary>
-		/// Fired when the volume shadow copy has been created and mounted.
+		/// Fired when the volume shadow copy snapshot has been created and
+		/// mounted.
 		/// Invoked asynchronously, except if the event handler is a method
-		/// of a Control instance, in which case it will be invoked in the
+		/// of a Control instance, in which case it will be dispatched in the
 		/// thread which created the control.
+		/// Do NOT attach or detach event handlers after starting the session!
 		/// </summary>
 		public event EventHandler Ready;
 
 		/// <summary>
-		/// Fired when the volume shadow copy could not be created or mounted.
-		/// Probably invoked asynchronously, except if the event handler is a
-		/// method of a Control instance, in which case it will be invoked in
-		/// the thread which created the control.
+		/// Fired when the volume shadow copy snapshot could not be created
+		/// or mounted.
+		/// The session will already be disposed of.
+		/// Invoked asynchronously, except if the event handler is a method
+		/// of a Control instance, in which case it will be dispatched in the
+		/// thread which created the control.
+		/// Do NOT attach or detach event handlers after starting the session!
 		/// </summary>
-		public event EventHandler<TextEventArgs> Aborted;
+		public event EventHandler<TextEventArgs> Error;
 
 
-		/// <summary>
-		/// Creates a new volume shadow copy session.
-		/// </summary>
-		public VolumeShadowCopySession()
+		public void Start(string sourceFolder)
 		{
-			// make sure the path to the vshadow.exe is set
-			if (string.IsNullOrEmpty(_vshadowPath))
+			if (!PathHelper.IsValidAbsolutePath(sourceFolder) || !Directory.Exists(sourceFolder))
+				throw new ArgumentException("sourceFolder must be a valid absolute path to an existing folder.", "sourceFolder");
+
+			lock (_syncObject)
 			{
-				_vshadowPath = Path.Combine(System.Windows.Forms.Application.StartupPath, "Tools");
+				if (_thread != null)
+					throw new InvalidOperationException("The volume shadow copy session has already been started.");
 
-				// select either the 64 bit or 32 bit version
-				bool x64 = Directory.Exists(Environment.SystemDirectory + @"\..\SysWOW64");
-				_vshadowPath = Path.Combine(_vshadowPath,
-					(x64 ? "vshadow64.exe" : "vshadow32.exe"));
-
-				if (!File.Exists(_vshadowPath))
-					throw new InvalidOperationException(string.Format("{0} does not exist.", PathHelper.Quote(_vshadowPath)));
+				SourceFolder = sourceFolder;
+				_thread = new VscThread(this);
 			}
 		}
 
 		/// <summary>
-		/// Makes sure the persistent shadow copy is deleted.
-		/// Disposing is thread-safe and repeatable.
+		/// Initiates disposing of the volume shadow copy snapshot.
+		/// Disposing is safely repeatable.
 		/// </summary>
 		public void Dispose()
 		{
 			lock (_syncObject)
 			{
-				if (_process != null)
-				{
-					_process.Dispose();
-					_process = null;
-				}
-
-				if (SnapshotID != null)
-				{
-					// try to delete the shadow copy synchronously
-					// (deleting is fast anyway)
-					using (var process = new ConsoleProcess())
-					{
-						process.StartInfo.FileName = _vshadowPath;
-						process.StartInfo.Arguments = string.Format("-ds={0}", SnapshotID);
-
-						process.Start();
-						process.WaitForExit();
-					}
-
-					SnapshotID = null;
-				}
-
-				if (!string.IsNullOrEmpty(MountPoint))
-				{
-					Directory.Delete(MountPoint);
-					MountPoint = null;
-				}
+				if (_thread != null)
+					_thread.Dispose();
 			}
 		}
 
 
-		/// <summary>
-		/// Starts the session, i.e. creates a persistent shadow copy of the specified
-		/// volume and mounts it in a temporary directory.
-		/// </summary>
-		public void Start(string volume)
+		private void OnReady()
 		{
-			if (string.IsNullOrEmpty(volume))
-				throw new ArgumentNullException("volume");
-
-			if (SnapshotID != null)
-				throw new InvalidOperationException("The shadow copy session is already active.");
-
-			_process = new ConsoleProcess();
-
-			_process.StartInfo.FileName = _vshadowPath;
-			_process.StartInfo.Arguments = string.Format("-p -nw {0}", PathHelper.Quote(volume));
-
-			_process.Exited += CreationProcess_Exited;
-
-			try
-			{
-				_process.Start();
-			}
-			catch (Exception e)
-			{
-				OnAborted(new TextEventArgs("The volume shadow copy could not be created:\n\n" +
-					e.Message));
-			}
+			SmartEventInvoker.FireEvent(Ready, this, EventArgs.Empty);
 		}
 
-		/// <summary>
-		/// Invoked asynchronously when the creation process has exited.
-		/// </summary>
-		private void CreationProcess_Exited(object sender, EventArgs e)
+		private void OnError(string text)
 		{
-			if (_process.ExitCode == 0)
+			SmartEventInvoker.FireEvent(Error, this, new TextEventArgs(text));
+		}
+
+
+
+		#region VscThread class
+
+		/// <summary>
+		/// Represents a new thread which
+		/// * creates and mounts the volume shadow copy snapshot,
+		/// * fires the session's Ready event,
+		/// * waits for a Dispose() request and
+		/// * unmounts and deletes the snapshot.
+		/// </summary>
+		private sealed class VscThread : IDisposable
+		{
+			private readonly VolumeShadowCopySession _session;
+			private readonly object _disposeEventSyncObject = new object();
+			private ManualResetEvent _disposeEvent = new ManualResetEvent(false);
+
+			// exclusively accessed by the new thread only:
+			private IVssBackupComponents _backup;
+			private Guid _snapshotSetID = Guid.Empty;
+			private Guid _volumeSnapshotID = Guid.Empty;
+
+			/// <summary>Creates a new thread and starts it.</summary>
+			public VscThread(VolumeShadowCopySession session)
 			{
+				_session = session;
+
+				var thread = new Thread(this.Main);
+				thread.Start();
+			}
+
+			/// <summary>
+			/// Initiates disposing.
+			/// Actual disposing will be deferred to either one of a few points during
+			/// the creation of the snapshot (in order to allow aborting the operation
+			/// in a controlled way), or, once the snapshot is mounted, after all Ready
+			/// event handlers have finished.
+			/// This method is thread-safe and repeatable.
+			/// </summary>
+			public void Dispose()
+			{
+				// Cleanup() closes _disposeEvent and sets it to null
+				lock (_disposeEventSyncObject)
+				{
+					if (_disposeEvent != null)
+						_disposeEvent.Set();
+				}
+			}
+
+			private delegate void Action();
+			private void Main()
+			{
+				string sourceFolder = PathHelper.AppendSeparator(_session.SourceFolder);                         // C:\,  C:\Folder\, \\Server\Share\, \\Server\Share\Folder\
+				string volume = PathHelper.RemoveTrailingSeparator(Path.GetPathRoot(sourceFolder));              // C:,   C:,         \\Server\Share,  \\Server\Share
+				string pathFromRoot = PathHelper.RemoveTrailingSeparator(sourceFolder.Substring(volume.Length)); // "",   \Folder,    "",              \Folder
+				if (pathFromRoot.Length == 0)
+					pathFromRoot = null;                                                                         // null, \Folder,    null,            \Folder
+
 				try
 				{
-					MountShadowCopy();
+					// helper function throwing an ObjectDisposedException if _disposeEvent is currently signaled
+					Action CheckForDisposeRequest = () => { if (_disposeEvent.WaitOne(0)) throw new ObjectDisposedException("VscThread"); };
+
+					CheckForDisposeRequest();
+
+					_backup = VssUtils.LoadImplementation().CreateVssBackupComponents();
+					_backup.InitializeForBackup(null);
+					_backup.SetContext(VssSnapshotContext.Backup);
+					_backup.SetBackupState(false, false, VssBackupType.Copy, false);
+					CheckForDisposeRequest();
+
+					_backup.GatherWriterMetadata();
+					CheckForDisposeRequest();
+
+					_snapshotSetID = _backup.StartSnapshotSet();
+					_volumeSnapshotID = _backup.AddToSnapshotSet(PathHelper.AppendSeparator(volume));
+					CheckForDisposeRequest();
+
+					_backup.PrepareForBackup();
+					VerifyWriterStatus();
+					CheckForDisposeRequest();
+
+					// create the snapshot
+					_backup.DoSnapshotSet();
+					VerifyWriterStatus();
+
+					// mount the source folder as file share
+					// (non-persistent shadow copies cannot be mounted locally on a drive or folder)
+					string shareName = _backup.ExposeSnapshot(_volumeSnapshotID, pathFromRoot,
+						VssVolumeSnapshotAttributes.ExposedRemotely, null);
+					_session._mountPoint = @"\\localhost\" + shareName;
+
+					CheckForDisposeRequest();
 				}
-				catch (Exception exception)
+				catch (ObjectDisposedException) // by CheckForDisposeRequest()
 				{
-					OnAborted(new TextEventArgs("The volume shadow copy could not be mounted:\n\n" +
-						exception.Message));
+					Cleanup();
+					return;
 				}
-			}
-			else
-			{
-				OnAborted(new TextEventArgs("The volume shadow copy could not be created:\n\n" +
-					_process.FullOutput));
-			}
-		}
-
-
-		/// <summary>
-		/// Parses the vshadow output after shadow copy creation and
-		/// mounts the snapshot in an appropriate temporary directory.
-		/// </summary>
-		private void MountShadowCopy()
-		{
-			var lines = _process.Output;
-
-			// parse the snapshot ID
-			for (int i = lines.Count - 1; i >= 0; i--)
-			{
-				if (lines[i].StartsWith("* SNAPSHOT ID = ", StringComparison.Ordinal))
+				catch (Exception e)
 				{
-					SnapshotID = lines[i].Substring(16, 38);
-					break;
+					Cleanup();
+
+					string msg = (e is UnauthorizedAccessException
+						? "You lack the required privileges to create a volume shadow copy.\nPlease restart RoboMirror as administrator."
+						: "The volume shadow copy could not be created:\n\n" + e.Message);
+					_session.OnError(msg);
+
+					return;
+				}
+
+				// fire the Ready event
+				try { _session.OnReady(); }
+				// on unhandled exception by Ready event handler: Cleanup() before rethrowing
+				catch { Cleanup(); throw; }
+
+				// wait for Dispose() signal
+				_disposeEvent.WaitOne();
+
+				Cleanup();
+			}
+
+			private void VerifyWriterStatus()
+			{
+				_backup.GatherWriterStatus();
+
+				var sb = new System.Text.StringBuilder();
+				foreach (var status in _backup.WriterStatus)
+				{
+					if (status.Failure != VssError.Success)
+					{
+						sb.AppendFormat("VSS writer {0} reports error {1}{2}", status.Name, status.Failure.ToString(),
+							string.IsNullOrEmpty(status.ApplicationErrorMessage) ? string.Empty : ": " + status.ApplicationErrorMessage);
+						sb.AppendLine();
+					}
+				}
+
+				if (sb.Length > 0)
+					throw new Exception(sb.ToString());
+			}
+
+			private void Cleanup()
+			{
+				if (_session._mountPoint != null)
+				{
+					_backup.BackupComplete();
+					VerifyWriterStatus();
+
+					_backup.UnexposeSnapshot(_volumeSnapshotID);
+					_session._mountPoint = null;
+				}
+
+				if (_snapshotSetID != Guid.Empty)
+					_backup.DeleteSnapshotSet(_snapshotSetID, forceDelete: true);
+
+				if (_backup != null)
+					_backup.Dispose();
+
+				lock (_disposeEventSyncObject)
+				{
+					_disposeEvent.Close();
+					_disposeEvent = null;
 				}
 			}
-
-			if (SnapshotID == null)
-			{
-				throw new NotSupportedException("The vshadow output could not be parsed:\n\n" +
-					_process.FullOutput);
-			}
-
-			// create a new directory in the temp folder and use it as
-			// mount point
-			string tempPath = Path.GetTempPath();
-			string path;
-
-			do
-			{
-				path = Path.Combine(tempPath, Guid.NewGuid().ToString()); // no trailing directory separator character
-			} while (Directory.Exists(path));
-
-			Directory.CreateDirectory(path);
-
-			MountPoint = path;
-
-			// start the mount process
-			_process.Dispose();
-			_process = null;
-
-			_process = new ConsoleProcess();
-
-			_process.StartInfo.FileName = _vshadowPath;
-			_process.StartInfo.Arguments = string.Format("-el={0},{1}", SnapshotID, PathHelper.Quote(path));
-
-			_process.Exited += MountProcess_Exited;
-
-			_process.Start();
 		}
 
-		/// <summary>
-		/// Invoked asynchronously when the mount process has exited.
-		/// </summary>
-		private void MountProcess_Exited(object sender, EventArgs e)
-		{
-			if (_process.ExitCode != 0)
-			{
-				OnAborted(new TextEventArgs("The volume shadow copy could not be mounted:\n\n" +
-					_process.FullOutput));
-			}
-
-			_process.Dispose();
-			_process = null;
-
-			OnReady(EventArgs.Empty);
-		}
-
-
-		/// <summary>
-		/// Fires the Ready event.
-		/// </summary>
-		private void OnReady(EventArgs e)
-		{
-			SmartEventInvoker.FireEvent(Ready, this, e);
-		}
-
-		/// <summary>
-		/// Disposes of the session and fires the Aborted event.
-		/// </summary>
-		internal void OnAborted(TextEventArgs e)
-		{
-			Dispose();
-
-			SmartEventInvoker.FireEvent(Aborted, this, e);
-		}
+		#endregion
 	}
 }

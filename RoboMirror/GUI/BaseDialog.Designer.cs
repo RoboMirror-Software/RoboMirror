@@ -1,4 +1,4 @@
-﻿namespace RoboMirror
+﻿namespace RoboMirror.GUI
 {
 	partial class BaseDialog
 	{
@@ -40,10 +40,10 @@
 			this.cancelButton.DialogResult = System.Windows.Forms.DialogResult.No;
 			this.cancelButton.Image = global::RoboMirror.Properties.Resources.delete;
 			this.cancelButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			this.cancelButton.Location = new System.Drawing.Point(180, 0);
+			this.cancelButton.Location = new System.Drawing.Point(210, 0);
 			this.cancelButton.Name = "cancelButton";
-			this.cancelButton.Padding = new System.Windows.Forms.Padding(8, 0, 19, 0);
-			this.cancelButton.Size = new System.Drawing.Size(100, 32);
+			this.cancelButton.Padding = new System.Windows.Forms.Padding(20, 0, 20, 0);
+			this.cancelButton.Size = new System.Drawing.Size(117, 37);
 			this.cancelButton.TabIndex = 1;
 			this.cancelButton.Text = "Cancel";
 			this.cancelButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
@@ -55,10 +55,10 @@
 			this.okButton.DialogResult = System.Windows.Forms.DialogResult.Yes;
 			this.okButton.Image = global::RoboMirror.Properties.Resources.check;
 			this.okButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			this.okButton.Location = new System.Drawing.Point(64, 0);
+			this.okButton.Location = new System.Drawing.Point(75, 0);
 			this.okButton.Name = "okButton";
-			this.okButton.Padding = new System.Windows.Forms.Padding(8, 0, 28, 0);
-			this.okButton.Size = new System.Drawing.Size(100, 32);
+			this.okButton.Padding = new System.Windows.Forms.Padding(20, 0, 35, 0);
+			this.okButton.Size = new System.Drawing.Size(117, 37);
 			this.okButton.TabIndex = 0;
 			this.okButton.Text = "OK";
 			this.okButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
@@ -69,17 +69,17 @@
 			this.panel1.Controls.Add(this.cancelButton);
 			this.panel1.Controls.Add(this.okButton);
 			this.panel1.Dock = System.Windows.Forms.DockStyle.Bottom;
-			this.panel1.Location = new System.Drawing.Point(0, 222);
+			this.panel1.Location = new System.Drawing.Point(0, 256);
 			this.panel1.Name = "panel1";
-			this.panel1.Size = new System.Drawing.Size(292, 44);
+			this.panel1.Size = new System.Drawing.Size(341, 51);
 			this.panel1.TabIndex = 1000;
 			// 
 			// BaseDialog
 			// 
-			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+			this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.CancelButton = this.cancelButton;
-			this.ClientSize = new System.Drawing.Size(292, 266);
+			this.ClientSize = new System.Drawing.Size(341, 307);
 			this.Controls.Add(this.panel1);
 			this.MaximizeBox = false;
 			this.MinimizeBox = false;

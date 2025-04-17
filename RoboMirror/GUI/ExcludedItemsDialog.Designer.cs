@@ -1,4 +1,4 @@
-﻿namespace RoboMirror
+﻿namespace RoboMirror.GUI
 {
 	partial class ExcludedItemsDialog
 	{
@@ -39,9 +39,9 @@
 			this.label1 = new System.Windows.Forms.Label();
 			this.pictureBox3 = new System.Windows.Forms.PictureBox();
 			this.filesGroupBox = new System.Windows.Forms.GroupBox();
-			this.excludedFilesControl = new RoboMirror.ExcludedItemsControl();
+			this.excludedFilesControl = new RoboMirror.GUI.ExcludedItemsControl();
 			this.foldersGroupBox = new System.Windows.Forms.GroupBox();
-			this.excludedFoldersControl = new RoboMirror.ExcludedItemsControl();
+			this.excludedFoldersControl = new RoboMirror.GUI.ExcludedItemsControl();
 			this.splitContainer = new System.Windows.Forms.SplitContainer();
 			this.groupBox1.SuspendLayout();
 			this.tableLayoutPanel1.SuspendLayout();
@@ -70,7 +70,7 @@
 			// checkBox2
 			// 
 			this.checkBox2.AutoSize = true;
-			this.checkBox2.Location = new System.Drawing.Point(166, 0);
+			this.checkBox2.Location = new System.Drawing.Point(162, 0);
 			this.checkBox2.Margin = new System.Windows.Forms.Padding(0);
 			this.checkBox2.Name = "checkBox2";
 			this.checkBox2.Size = new System.Drawing.Size(64, 19);
@@ -84,7 +84,7 @@
 			// checkBox3
 			// 
 			this.checkBox3.AutoSize = true;
-			this.checkBox3.Location = new System.Drawing.Point(331, 0);
+			this.checkBox3.Location = new System.Drawing.Point(323, 0);
 			this.checkBox3.Margin = new System.Windows.Forms.Padding(0);
 			this.checkBox3.Name = "checkBox3";
 			this.checkBox3.Size = new System.Drawing.Size(79, 19);
@@ -102,7 +102,7 @@
 			this.groupBox1.Controls.Add(this.tableLayoutPanel1);
 			this.groupBox1.Location = new System.Drawing.Point(14, 157);
 			this.groupBox1.Name = "groupBox1";
-			this.groupBox1.Size = new System.Drawing.Size(423, 47);
+			this.groupBox1.Size = new System.Drawing.Size(414, 47);
 			this.groupBox1.TabIndex = 1;
 			this.groupBox1.TabStop = false;
 			this.groupBox1.Text = "Exclude files having any of these attributes set:";
@@ -124,7 +124,7 @@
 			this.tableLayoutPanel1.Name = "tableLayoutPanel1";
 			this.tableLayoutPanel1.RowCount = 1;
 			this.tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle());
-			this.tableLayoutPanel1.Size = new System.Drawing.Size(411, 19);
+			this.tableLayoutPanel1.Size = new System.Drawing.Size(402, 19);
 			this.tableLayoutPanel1.TabIndex = 3;
 			// 
 			// label1
@@ -174,7 +174,7 @@
 			this.excludedFilesControl.BaseFolder = null;
 			this.excludedFilesControl.Font = this.Font;
 			this.excludedFilesControl.Location = new System.Drawing.Point(14, 22);
-			this.excludedFilesControl.Mode = RoboMirror.ExcludedItemsMode.Files;
+			this.excludedFilesControl.Mode = RoboMirror.GUI.ExcludedItemsMode.Files;
 			this.excludedFilesControl.Name = "excludedFilesControl";
 			this.excludedFilesControl.Size = new System.Drawing.Size(540, 124);
 			this.excludedFilesControl.TabIndex = 0;
@@ -201,7 +201,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
 			this.excludedFoldersControl.BaseFolder = null;
 			this.excludedFoldersControl.Location = new System.Drawing.Point(14, 22);
-			this.excludedFoldersControl.Mode = RoboMirror.ExcludedItemsMode.Folders;
+			this.excludedFoldersControl.Mode = RoboMirror.GUI.ExcludedItemsMode.Folders;
 			this.excludedFoldersControl.Name = "excludedFoldersControl";
 			this.excludedFoldersControl.Size = new System.Drawing.Size(540, 125);
 			this.excludedFoldersControl.TabIndex = 0;

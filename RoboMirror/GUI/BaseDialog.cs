@@ -8,7 +8,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Base of all dialogs.
@@ -65,7 +65,7 @@ namespace RoboMirror
 			// prompt the user to save the changes if no button has been pressed
 			if (HasChanged && DialogResult != DialogResult.Yes && DialogResult != DialogResult.No)
 			{
-				DialogResult answer = MessageBox.Show("Would you like to save your changes?",
+				DialogResult answer = MessageBox.Show(this, "Would you like to save your changes?",
 					"Pending changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 
 				if (answer == DialogResult.Cancel)

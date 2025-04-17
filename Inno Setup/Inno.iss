@@ -1,5 +1,5 @@
 #define MyAppName "RoboMirror"
-#define MyAppVersion "1.2"
+#define MyAppVersion "1.3"
 #define MyAppExeName "RoboMirror.exe"
 
 [Setup]
@@ -26,10 +26,14 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
 Source: "..\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Release\{#MyAppExeName}.config"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Release\Microsoft.Win32.TaskScheduler.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Release\AlphaVSS.Common.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Release\AlphaVSS.51.x86.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: IsWindows51 and (not Is64BitInstallMode)
+Source: "..\Release\AlphaVSS.52.x86.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: IsWindows52 and (not Is64BitInstallMode)
+Source: "..\Release\AlphaVSS.52.x64.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: IsWindows52 and Is64BitInstallMode
+Source: "..\Release\AlphaVSS.60.x86.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: IsWindowsVistaOrLater and (not Is64BitInstallMode)
+Source: "..\Release\AlphaVSS.60.x64.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: IsWindowsVistaOrLater and Is64BitInstallMode
 Source: "..\Release\{#MyAppName} web site.url"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Release\Tools\Robocopy.exe"; DestDir: "{app}\Tools"; Flags: ignoreversion
-Source: "..\Release\Tools\vshadow32.exe"; DestDir: "{app}\Tools"; Flags: ignoreversion; Check: not Is64BitInstallMode
-Source: "..\Release\Tools\vshadow64.exe"; DestDir: "{app}\Tools"; Flags: ignoreversion; Check: Is64BitInstallMode
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -119,9 +123,20 @@ begin
   Result := RegKeyExists(HKLM, 'SOFTWARE\Microsoft\NET Framework Setup\NDP\' + version);
 end;
 
+
+function IsWindows51: Boolean; // XP
+begin
+  Result := (GetWindowsVersion Shr 16) = $0501
+end;
+
+function IsWindows52: Boolean; // Server 2003 / XP x64
+begin
+  Result := (GetWindowsVersion Shr 16) = $0502
+end;
+
 function IsWindowsVistaOrLater: Boolean;
 begin
-  Result := GetWindowsVersion >= $06000000
+  Result := (GetWindowsVersion Shr 16) >= $0600
 end;
 
 

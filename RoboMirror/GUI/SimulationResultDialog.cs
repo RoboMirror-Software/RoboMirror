@@ -9,7 +9,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Displays the result of a Robocopy simulation process and prompts the user

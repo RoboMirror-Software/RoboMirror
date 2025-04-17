@@ -9,7 +9,7 @@ using System;
 using System.Windows.Forms;
 using Microsoft.Win32.TaskScheduler;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Allows scheduling of a backup task on Windows.
@@ -54,12 +54,12 @@ namespace RoboMirror
 				else
 					throw new NotSupportedException("The existing scheduled task's trigger is not supported.");
 
-				dateTimePicker1.Value = trigger.StartBoundary;
+				datePicker.Value = timePicker.Value = trigger.StartBoundary;
 			}
 			else
 			{
 				intervalComboBox.SelectedIndex = 1;
-				dateTimePicker1.Value = DateTime.Now;
+				datePicker.Value = timePicker.Value = DateTime.Now;
 			}
 		}
 
@@ -72,7 +72,7 @@ namespace RoboMirror
 
 		private void checkBox1_CheckedChanged(object sender, EventArgs e)
 		{
-			intervalComboBox.Enabled = dateTimePicker1.Enabled = checkBox1.Checked;
+			intervalComboBox.Enabled = datePicker.Enabled = timePicker.Enabled = checkBox1.Checked;
 			HasChanged = true;
 		}
 
@@ -101,7 +101,7 @@ namespace RoboMirror
 				else
 					trigger = new MonthlyDOWTrigger();
 
-				trigger.StartBoundary = dateTimePicker1.Value;
+				trigger.StartBoundary = datePicker.Value.Date.Add(timePicker.Value.TimeOfDay);
 
 				_manager.Save(_mirrorTask, trigger);
 

@@ -8,7 +8,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Simple form containing only a read-only text box.

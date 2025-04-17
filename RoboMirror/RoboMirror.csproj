@@ -68,12 +68,14 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="AlphaVSS.Common">
+      <HintPath>.\AlphaVSS.Common.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Win32.TaskScheduler, Version=2.2.0.18503, Culture=neutral, PublicKeyToken=0d013ddd5178a2ae, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>.\Microsoft.Win32.TaskScheduler.dll</HintPath>
     </Reference>
     <Reference Include="System" />
-    <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
@@ -81,10 +83,10 @@
   <ItemGroup>
     <Compile Include="ConsoleProcess.cs">
     </Compile>
-    <Compile Include="ExcludedItemsControl.cs">
+    <Compile Include="GUI\ExcludedItemsControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="ExcludedItemsControl.Designer.cs">
+    <Compile Include="GUI\ExcludedItemsControl.Designer.cs">
       <DependentUpon>ExcludedItemsControl.cs</DependentUpon>
     </Compile>
     <Compile Include="FileDropTargetWrapper.cs" />
@@ -92,14 +94,14 @@
     <Compile Include="PathHelper.cs" />
     <Compile Include="ScheduledTasksManager.cs" />
     <Compile Include="SmartEventInvoker.cs" />
-    <Compile Include="MirrorOperation.cs">
-      <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="ScheduledBackupExecutor.cs" />
-    <Compile Include="TaskHistoryForm.cs">
+    <Compile Include="MirrorOperation.cs" />
+    <Compile Include="GUI\ScheduledBackupExecutor.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="TaskHistoryForm.Designer.cs">
+    <Compile Include="GUI\TaskHistoryForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="GUI\TaskHistoryForm.Designer.cs">
       <DependentUpon>TaskHistoryForm.cs</DependentUpon>
     </Compile>
     <Compile Include="TaskManager.cs" />
@@ -107,70 +109,70 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="MirrorTask.cs" />
-    <Compile Include="TaskDialog.cs">
+    <Compile Include="GUI\TaskDialog.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="TaskDialog.Designer.cs">
+    <Compile Include="GUI\TaskDialog.Designer.cs">
       <DependentUpon>TaskDialog.cs</DependentUpon>
     </Compile>
-    <Compile Include="BaseDialog.cs">
+    <Compile Include="GUI\BaseDialog.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="BaseDialog.Designer.cs">
+    <Compile Include="GUI\BaseDialog.Designer.cs">
       <DependentUpon>BaseDialog.cs</DependentUpon>
     </Compile>
-    <Compile Include="BaseForm.cs">
+    <Compile Include="GUI\BaseForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="BaseForm.Designer.cs">
+    <Compile Include="GUI\BaseForm.Designer.cs">
       <DependentUpon>BaseForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="ExcludedItemsDialog.cs">
+    <Compile Include="GUI\ExcludedItemsDialog.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="ExcludedItemsDialog.Designer.cs">
+    <Compile Include="GUI\ExcludedItemsDialog.Designer.cs">
       <DependentUpon>ExcludedItemsDialog.cs</DependentUpon>
     </Compile>
-    <Compile Include="MainForm.cs">
+    <Compile Include="GUI\MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="MainForm.Designer.cs">
+    <Compile Include="GUI\MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="LogForm.cs">
+    <Compile Include="GUI\LogForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="LogForm.Designer.cs">
+    <Compile Include="GUI\LogForm.Designer.cs">
       <DependentUpon>LogForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="UacHelper.cs" />
     <Compile Include="XmlFileManager.cs" />
-    <EmbeddedResource Include="ExcludedItemsControl.resx">
+    <EmbeddedResource Include="GUI\ExcludedItemsControl.resx">
       <DependentUpon>ExcludedItemsControl.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="TaskDialog.resx">
+    <EmbeddedResource Include="GUI\TaskDialog.resx">
       <DependentUpon>TaskDialog.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="BaseDialog.resx">
+    <EmbeddedResource Include="GUI\BaseDialog.resx">
       <DependentUpon>BaseDialog.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="BaseForm.resx">
+    <EmbeddedResource Include="GUI\BaseForm.resx">
       <DependentUpon>BaseForm.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="ExcludedItemsDialog.resx">
+    <EmbeddedResource Include="GUI\ExcludedItemsDialog.resx">
       <DependentUpon>ExcludedItemsDialog.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="MainForm.resx">
+    <EmbeddedResource Include="GUI\MainForm.resx">
       <DependentUpon>MainForm.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="LogForm.resx">
+    <EmbeddedResource Include="GUI\LogForm.resx">
       <DependentUpon>LogForm.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -179,15 +181,15 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="ScheduleTaskDialog.resx">
+    <EmbeddedResource Include="GUI\ScheduleTaskDialog.resx">
       <DependentUpon>ScheduleTaskDialog.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="SimulationResultDialog.resx">
+    <EmbeddedResource Include="GUI\SimulationResultDialog.resx">
       <DependentUpon>SimulationResultDialog.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="TaskHistoryForm.resx">
+    <EmbeddedResource Include="GUI\TaskHistoryForm.resx">
       <DependentUpon>TaskHistoryForm.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -207,16 +209,16 @@
     </Compile>
     <Compile Include="RobocopyProcess.cs">
     </Compile>
-    <Compile Include="ScheduleTaskDialog.cs">
+    <Compile Include="GUI\ScheduleTaskDialog.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="ScheduleTaskDialog.Designer.cs">
+    <Compile Include="GUI\ScheduleTaskDialog.Designer.cs">
       <DependentUpon>ScheduleTaskDialog.cs</DependentUpon>
     </Compile>
-    <Compile Include="SimulationResultDialog.cs">
+    <Compile Include="GUI\SimulationResultDialog.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="SimulationResultDialog.Designer.cs">
+    <Compile Include="GUI\SimulationResultDialog.Designer.cs">
       <DependentUpon>SimulationResultDialog.cs</DependentUpon>
     </Compile>
     <Compile Include="VolumeShadowCopySession.cs" />

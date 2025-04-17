@@ -6,11 +6,13 @@
  */
 
 using System;
+using System.ComponentModel;
+using System.IO;
 using System.Windows.Forms;
 
 namespace RoboMirror
 {
-	#region FinishedEventArgs class.
+	#region FinishedEventArgs class
 
 	/// <summary>
 	/// EventArgs derivate for the MirrorOperation's Finished event.
@@ -19,15 +21,11 @@ namespace RoboMirror
 	{
 		/// <summary>
 		/// Gets a value indicating whether the operation was successful,
-		/// i.e. whether both folders have already been in sync or the
+		/// i.e., whether both folders have already been in sync or the
 		/// destination folder has been synchronized successfully.
 		/// </summary>
 		public bool Success { get; private set; }
 
-
-		/// <summary>
-		/// Creates a new FinishedEventArgs.
-		/// </summary>
 		public FinishedEventArgs(bool success)
 		{
 			Success = success;
@@ -36,204 +34,185 @@ namespace RoboMirror
 
 	#endregion
 
-
 	/// <summary>
 	/// Encapsulates a backup or restore operation.
 	/// It provides some minimal GUI through a task tray icon and manages
 	/// output logging and error handling.
-	/// It is designed as Control only because it offers a neat synchronization
-	/// mechanism in combination with the SmartEventInvoker: the local event
-	/// handlers are invoked in the thread which created the MirrorOperation
-	/// instance. This allows for a single shared GUI thread.
 	/// </summary>
-	public sealed class MirrorOperation : Control
+	public sealed class MirrorOperation : IDisposable, ISynchronizeInvoke
 	{
 		// number of milliseconds after which a balloon tip will fade out
 		// automatically
-		private const int BALLOON_TIMEOUT = 10000;
+		private const int BALLOON_TIMEOUT = 20000;
+
+		// all ISynchronizeInvoke calls will be forwarded to a control acting as
+		// synchronization object
+		// ISynchronizeInvoke offers a neat synchronization mechanism in
+		// combination with the SmartEventInvoker: all event handlers defined
+		// as non-static methods of an ISynchronizeInvoke implementation are
+		// invoked in the associated thread (either directly or via dispatching)
+		private readonly ISynchronizeInvoke _control;
 
 		// are we performing a backup or a restore operation?
-		private bool _reverse;
+		private readonly bool _reverse;
+
+		private VolumeShadowCopySession _vscSession;
 
 		// current/last Robocopy process
 		private RobocopyProcess _process;
-
-		// for a very rough progress estimation based on the number of output
-		// lines, used when a simulation is performed first:
-		private int _expectedOutputLinesCount, _currentOutputLinesCount;
+		int _simulationProcessOutputLinesCount = -1;
 
 		// tray icon
 		private NotifyIcon _icon;
 
 
-		/// <summary>
-		/// Gets the task associated with the operation.
-		/// </summary>
 		public MirrorTask Task { get; private set; }
 
-		private string DestinationFolder { get { return _reverse ? Task.Source : Task.Target; } }
+		public string SourceFolder { get; private set; }
+		public string DestinationFolder { get; private set; }
+
+		public bool HasStarted { get; private set; }
+		public bool IsFinished { get; private set; }
 
 
 		/// <summary>
 		/// Fired when the operation has finished.
-		/// If a backup has been completed successfully, the LastBackup
+		/// If the operation has been completed successfully, the LastOperation
 		/// property of the associated task has been updated.
 		/// </summary>
 		public event EventHandler<FinishedEventArgs> Finished;
 
 
-		/// <summary>
-		/// Creates a new MirrorOperation.
-		/// </summary>
-		/// <param name="task">Associated task.</param>
+		/// <param name="control">Synchronization object.</param>
 		/// <param name="reverse">
-		/// Indicates whether source and target are to be swapped, i.e.
-		/// whether this will be a restore or backup operation.
+		/// Indicates whether source and target folders are to be swapped,
+		/// i.e., whether this is a restore or backup operation.
 		/// </param>
-		public MirrorOperation(MirrorTask task, bool reverse)
-			: base()
+		public MirrorOperation(ISynchronizeInvoke control, MirrorTask task, bool reverse)
 		{
+			if (control == null)
+				throw new ArgumentNullException("control");
 			if (task == null)
 				throw new ArgumentNullException("task");
 
+			_control = control;
 			Task = task;
 			_reverse = reverse;
+		}
 
+
+		/// <param name="simulateFirst">
+		/// Indicates whether a simulation run is to be performed before the
+		/// actual operation. This is used to identify the pending changes,
+		/// prompt the user for confirmation and enable some rough progress
+		/// estimation for the actual operation.
+		/// </param>
+		public void Start(bool simulateFirst)
+		{
+			if (IsFinished)
+				throw new InvalidOperationException("The operation has already finished.");
+			if (HasStarted)
+				throw new InvalidOperationException("The operation has already been started.");
+
+			SourceFolder = (!_reverse ? Task.Source : Task.Target);
+			DestinationFolder = (!_reverse ? Task.Target : Task.Source);
+			HasStarted = true;
+
+			CreateTrayIcon();
+
+			if (simulateFirst)
+				StartSimulationProcess();
+			else
+				LaunchActualOperation();
+		}
+
+		private void CreateTrayIcon()
+		{
 			_icon = new NotifyIcon();
 			_icon.Icon = Properties.Resources.data_copy_Icon;
 			_icon.Text = string.Format("RoboMirroring...");
 
 			_icon.ContextMenuStrip = new ContextMenuStrip();
 
-			_icon.ContextMenuStrip.Items.Add("Destination: " + DestinationFolder);
+			_icon.ContextMenuStrip.Items.Add("To: " + DestinationFolder);
 			_icon.ContextMenuStrip.Items[0].Enabled = false;
 
 			_icon.ContextMenuStrip.Items.Add("Abort", Properties.Resources.delete,
-				AbortToolStripItem_Clicked);
+				(s, e) => { Abort(); });
 
 			EnableAborting(false);
 
-			// create the control, otherwise it cannot be used as synchronization
-			// mechanism (it is based on the control's handle)
-			base.CreateControl();
-		}
-
-		/// <summary>
-		/// Disposes of the operation.
-		/// </summary>
-		/// <param name="disposing">
-		/// False if the destructor is calling the method, true if Dispose() is
-		/// the caller.
-		/// </param>
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				if (_process != null)
-				{
-					_process.Dispose();
-					_process = null;
-				}
-
-				if (_icon != null)
-				{
-					_icon.ContextMenuStrip.Dispose();
-					_icon.Dispose();
-					_icon = null;
-				}
-			}
-
-			base.Dispose(disposing);
-		}
-
-
-		/// <summary>
-		/// Starts the operation.
-		/// </summary>
-		/// <param name="simulateFirst">
-		/// Indicates whether a "preview run" is to be performed before the
-		/// actual operation. This is used to identify the pending changes to
-		/// prompt the user for confirmation and enable some rough progress
-		/// estimation for the actual operation.
-		/// </param>
-		public void Start(bool simulateFirst)
-		{
-			if (_process != null)
-				throw new InvalidOperationException("The operation has already been started.");
-
 			_icon.Visible = true;
+		}
 
-			try
+
+		public void Dispose()
+		{
+			if (_icon != null)
+				_icon.Visible = false;
+
+			if (_process != null)
 			{
-				_process = new RobocopyProcess(Task, _reverse);
-
-				if (simulateFirst)
-				{
-					_process.StartInfo.Arguments += " /l";
-
-					_process.Started += SimulationProcess_Started;
-					_process.Exited += SimulationProcess_Exited;
-
-					_process.Start();
-				}
-				else
-					StartRealProcess();
+				_process.Dispose(); // incl. killing it if currently running + waiting for it to exit and the Exited event handler to complete
+				_process = null;
 			}
-			catch (Exception e)
-			{
-				MessageBox.Show(e.Message, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-				OnFinished(new FinishedEventArgs(false));
+			if (_vscSession != null)
+			{
+				_vscSession.Dispose();
+				_vscSession = null;
+			}
+
+			if (_icon != null)
+			{
+				_icon.ContextMenuStrip.Dispose();
+				_icon.Dispose();
+				_icon = null;
 			}
 		}
 
 		/// <summary>
-		/// Starts the real (non-simulation) Robocopy process.
-		/// This method takes care of possibly embedding the process in a
-		/// volume shadow copy session.
+		/// Finishes the operation by disposing of it and firing the Finished event.
 		/// </summary>
-		private void StartRealProcess()
+		private void Finish(bool success)
 		{
-			_process.Started += RealProcess_Started;
-			_process.Exited += RealProcess_Exited;
+			if (IsFinished || !HasStarted)
+				return;
 
-			// keep track of the progress if a simulation has been performed first
-			if (_expectedOutputLinesCount > 0)
-				_process.LineWritten += RealProcess_LineWritten;
+			IsFinished = true;
 
-			if (Task.UseVolumeShadowCopy)
-			{
-				_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Preparing...",
-					"The volume shadow copy is being created.", ToolTipIcon.Info);
+			if (success)
+				Task.LastOperation = DateTime.Now;
 
-				_process.StartInVscSession(VscSession_Aborted);
-			}
-			else
-				_process.Start();
+			Dispose();
+
+			if (Finished != null)
+				Finished(this, new FinishedEventArgs(success));
 		}
 
 
-		#region Process event handlers.
+		#region Simulation process
 
-		/// <summary>
-		/// Invoked when a simulation process has been started.
-		/// </summary>
-		private void SimulationProcess_Started(object sender, EventArgs e)
+		private void StartSimulationProcess()
 		{
+			_process = new RobocopyProcess(Task, SourceFolder, DestinationFolder);
+			_process.StartInfo.Arguments += " /l";
+			_process.Exited += SimulationProcess_Exited;
+
+			if (!TryStartRobocopy(_process))
+				return;
+
 			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Analyzing...",
-				"Pending changes are being identified.", ToolTipIcon.Info);
+				"Pending changes are being identified...", ToolTipIcon.Info);
 
 			EnableAborting(true);
 		}
 
-		/// <summary>
-		/// Invoked when a simulation process has exited.
-		/// </summary>
 		private void SimulationProcess_Exited(object sender, EventArgs e)
 		{
 			EnableAborting(false);
 
-			bool aborted = (_process.ExitCode == -1);
+			bool aborted = (_process.ExitCode == -1 || IsFinished);
 
 			// alert if Robocopy could not be started normally
 			bool fatalError = (!aborted && _process.IsAnyExitFlagSet(RobocopyExitCodes.FatalError));
@@ -242,69 +221,116 @@ namespace RoboMirror
 
 			if (aborted || fatalError)
 			{
-				OnFinished(new FinishedEventArgs(false));
+				Finish(false);
 				return;
 			}
 
 			// prompt the user to commit the pending changes
-			using (var dialog = new SimulationResultDialog(_process))
+			using (var dialog = new GUI.SimulationResultDialog(_process))
 			{
 				if (dialog.ShowDialog() != DialogResult.OK)
 				{
-					OnFinished(new FinishedEventArgs(false));
+					Finish(false);
 					return;
 				}
 			}
 
-			_expectedOutputLinesCount = _process.Output.Count;
+			_simulationProcessOutputLinesCount = _process.Output.Count;
 			_process.Dispose();
 			_process = null;
 
-			try
-			{
-				_process = new RobocopyProcess(Task, _reverse);
-
-				StartRealProcess();
-			}
-			catch (Exception exception)
-			{
-				MessageBox.Show(exception.Message, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-				OnFinished(new FinishedEventArgs(false));
-			}
+			LaunchActualOperation();
 		}
 
+		#endregion
+
+		private void LaunchActualOperation()
+		{
+			if (Task.UseVolumeShadowCopy)
+				StartInVscSession();
+			else
+				StartProcess(SourceFolder);
+		}
+
+		#region Volume shadow copy
+
+		private void StartInVscSession()
+		{
+			string sourceVolume = PathHelper.RemoveTrailingSeparator(Path.GetPathRoot(SourceFolder));
+
+			_vscSession = new VolumeShadowCopySession();
+			_vscSession.Error += VscSession_Error;
+			_vscSession.Ready += VscSession_Ready;
+
+			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Preparing...",
+				string.Format("Creating shadow copy of volume {0} ...", PathHelper.Quote(sourceVolume)),
+				ToolTipIcon.Info);
+
+			// create and mount the shadow copy
+			_vscSession.Start(SourceFolder);
+
+			EnableAborting(true);
+		}
 
 		/// <summary>
-		/// Invoked when a real (non-simulation) process has been started.
+		/// Invoked if the volume shadow copy could not be created/mounted.
 		/// </summary>
-		private void RealProcess_Started(object sender, EventArgs e)
+		private void VscSession_Error(object sender, TextEventArgs e)
 		{
+			EnableAborting(false);
+
+			MessageBox.Show(e.Text, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+			Finish(false);
+		}
+
+		/// <summary>
+		/// Invoked when the volume shadow copy has been created and mounted.
+		/// </summary>
+		private void VscSession_Ready(object sender, EventArgs e)
+		{
+			EnableAborting(false);
+
+			if (!IsFinished)
+				StartProcess(_vscSession.MountPoint);
+		}
+
+		#endregion
+
+		#region Actual (non-simulation) process
+
+		/// <summary>Starts the actual (non-simulation) Robocopy process.</summary>
+		private void StartProcess(string sourceFolder)
+		{
+			_process = new RobocopyProcess(Task, sourceFolder, DestinationFolder, _simulationProcessOutputLinesCount);
+			_process.Exited += Process_Exited;
+			if (_simulationProcessOutputLinesCount > 0)
+				_process.ProgressChanged += Process_ProgressChanged;
+
+			if (!TryStartRobocopy(_process))
+				return;
+
 			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Mirroring...",
 				string.Format("to {0}", PathHelper.Quote(DestinationFolder)), ToolTipIcon.Info);
 
 			EnableAborting(true);
 		}
 
-		/// <summary>
-		/// Invoked when a real (non-simulation) process has written a
-		/// line to stdout or stderr.
-		/// </summary>
-		private void RealProcess_LineWritten(object sender, System.Diagnostics.DataReceivedEventArgs e)
+		private void Process_ProgressChanged(object sender, ProgressEventArgs e)
 		{
-			_currentOutputLinesCount++;
+			if (_icon == null)
+				return;
 
-			double expectedPercentage = (100.0 * _currentOutputLinesCount) / _expectedOutputLinesCount;
+			string percentageSuffix = (e.Percentage >= 100 ? string.Empty
+				: string.Format(" ({0}%)", e.Percentage.ToString("f1")));
 
-			_icon.Text = (expectedPercentage < 100
-				? string.Format("RoboMirroring... ({0}%)", expectedPercentage.ToString("F1"))
-				: "RoboMirroring...");
+			_icon.ContextMenuStrip.Items[0].Text = string.Format("To: {0}{1}",
+				DestinationFolder, percentageSuffix);
+
+			_icon.Text = string.Format("RoboMirroring...{0}", percentageSuffix);
 		}
 
-		/// <summary>
-		/// Invoked when a real (non-simulation) process has exited.
-		/// </summary>
-		private void RealProcess_Exited(object sender, EventArgs e)
+		private void Process_Exited(object sender, EventArgs e)
 		{
 			EnableAborting(false);
 
@@ -312,7 +338,7 @@ namespace RoboMirror
 
 			try
 			{
-				Log.LogRun(_process, Task);
+				Log.LogRun(Task.Guid, _process, SourceFolder, DestinationFolder);
 			}
 			catch (Exception exception)
 			{
@@ -322,64 +348,52 @@ namespace RoboMirror
 
 			bool success = CheckExitCode();
 
-			OnFinished(new FinishedEventArgs(success));
+			Finish(success);
+		}
+
+		#endregion
+
+
+		#region Aborting
+
+		/// <summary>Enables or disables the abort context menu item.</summary>
+		private void EnableAborting(bool enable)
+		{
+			if (_icon != null)
+				_icon.ContextMenuStrip.Items[1].Enabled = enable;
+		}
+
+		/// <summary>Aborts the operation if it is currently running.</summary>
+		public void Abort()
+		{
+			if (HasStarted && !IsFinished)
+				Finish(false);
 		}
 
 		#endregion
 
 
 		/// <summary>
-		/// Invoked if the volume shadow copy could not be created/mounted
-		/// or if the embedded Robocopy process could not be started.
+		/// Tries to start the specified process and returns true if successful.
+		/// If the process could not be started, a message box is displayed
+		/// and then the operation is finished.
 		/// </summary>
-		private void VscSession_Aborted(object sender, TextEventArgs e)
+		private bool TryStartRobocopy(RobocopyProcess process)
 		{
-			MessageBox.Show(e.Text, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-			OnFinished(new FinishedEventArgs(false));
-		}
-
-		/// <summary>
-		/// Invoked when the user clicks on the abort context menu item.
-		/// </summary>
-		private void AbortToolStripItem_Clicked(object sender, EventArgs e)
-		{
-			Abort();
-		}
-
-
-		/// <summary>
-		/// Enables or disables the abort context menu item.
-		/// </summary>
-		private void EnableAborting(bool enable)
-		{
-			_icon.ContextMenuStrip.Items[1].Enabled = enable;
-		}
-
-		/// <summary>
-		/// Prompts the user to abort the current operation.
-		/// </summary>
-		/// <returns>True if the operation has been aborted.</returns>
-		public bool Abort()
-		{
-			// is the operation not running?
-			if (_process == null || _process.HasExited)
-				return false;
-
-			// ask the user for confirmation and check if the process has
-			// exited in the meantime
-			if (MessageBox.Show(string.Format("Are you sure you want to abort mirroring to {0}?", PathHelper.Quote(DestinationFolder)),
-				"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) !=
-				DialogResult.Yes || _process.HasExited)
+			try
 			{
+				process.Start();
+				return true;
+			}
+			catch (Exception e)
+			{
+				MessageBox.Show("Robocopy could not be started:\n\n" + e.Message,
+					"RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+				Finish(false);
 				return false;
 			}
-
-			_process.Kill();
-
-			return true;
 		}
-
 
 		/// <summary>
 		/// Checks the exit code of the Robocopy process and informs the user
@@ -416,26 +430,31 @@ namespace RoboMirror
 		{
 			if (MessageBox.Show(text + "\nWould you like to view the log?", "RoboMirror", MessageBoxButtons.YesNo, icon) == DialogResult.Yes)
 			{
-				using (var form = new LogForm("Robocopy log", _process.FullOutput))
-				{
+				using (var form = new GUI.LogForm("Robocopy log", _process.FullOutput))
 					form.ShowDialog();
-				}
 			}
 		}
 
 
-		/// <summary>
-		/// Fires the Finished event after disposing of the operation.
-		/// </summary>
-		private void OnFinished(FinishedEventArgs e)
+		#region ISynchronizeInvoke (forwarding to _control only)
+
+		bool ISynchronizeInvoke.InvokeRequired { get { return _control.InvokeRequired; } }
+
+		IAsyncResult ISynchronizeInvoke.BeginInvoke(Delegate method, object[] args)
 		{
-			if (e.Success)
-				Task.LastOperation = DateTime.Now;
-
-			Dispose();
-
-			if (Finished != null)
-				Finished(this, e);
+			return _control.BeginInvoke(method, args);
 		}
+
+		object ISynchronizeInvoke.EndInvoke(IAsyncResult result)
+		{
+			return _control.EndInvoke(result);
+		}
+
+		object ISynchronizeInvoke.Invoke(Delegate method, object[] args)
+		{
+			return _control.Invoke(method, args);
+		}
+
+		#endregion
 	}
 }

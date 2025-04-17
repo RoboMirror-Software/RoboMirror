@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Diagnostics;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Displays the history of a mirror task, based on its event log entries.
@@ -27,7 +27,7 @@ namespace RoboMirror
 
 			InitializeComponent();
 
-			var entries = Log.LoadEntries(task);
+			var entries = Log.LoadEntries(task.Guid);
 
 			foreach (var entry in entries)
 			{

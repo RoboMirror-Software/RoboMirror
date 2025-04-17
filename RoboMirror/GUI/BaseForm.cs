@@ -8,7 +8,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Base of all forms.

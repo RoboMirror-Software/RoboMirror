@@ -1,4 +1,4 @@
-﻿namespace RoboMirror
+﻿namespace RoboMirror.GUI
 {
 	partial class TaskDialog
 	{
@@ -121,7 +121,7 @@
 			this.excludedItemsButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
 			this.excludedItemsButton.Location = new System.Drawing.Point(52, 76);
 			this.excludedItemsButton.Name = "excludedItemsButton";
-			this.excludedItemsButton.Padding = new System.Windows.Forms.Padding(5, 0, 5, 0);
+			this.excludedItemsButton.Padding = new System.Windows.Forms.Padding(10, 0, 10, 0);
 			this.excludedItemsButton.Size = new System.Drawing.Size(147, 27);
 			this.excludedItemsButton.TabIndex = 3;
 			this.excludedItemsButton.Text = "Excluded items...";
@@ -147,7 +147,7 @@
 			this.browseSourceFolderButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
 			this.browseSourceFolderButton.Location = new System.Drawing.Point(399, 41);
 			this.browseSourceFolderButton.Name = "browseSourceFolderButton";
-			this.browseSourceFolderButton.Padding = new System.Windows.Forms.Padding(5, 0, 5, 0);
+			this.browseSourceFolderButton.Padding = new System.Windows.Forms.Padding(10, 0, 10, 0);
 			this.browseSourceFolderButton.Size = new System.Drawing.Size(105, 27);
 			this.browseSourceFolderButton.TabIndex = 2;
 			this.browseSourceFolderButton.Text = "Browse...";
@@ -162,7 +162,7 @@
 			this.browseTargetFolderButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
 			this.browseTargetFolderButton.Location = new System.Drawing.Point(399, 148);
 			this.browseTargetFolderButton.Name = "browseTargetFolderButton";
-			this.browseTargetFolderButton.Padding = new System.Windows.Forms.Padding(5, 0, 5, 0);
+			this.browseTargetFolderButton.Padding = new System.Windows.Forms.Padding(10, 0, 10, 0);
 			this.browseTargetFolderButton.Size = new System.Drawing.Size(105, 27);
 			this.browseTargetFolderButton.TabIndex = 7;
 			this.browseTargetFolderButton.Text = "Browse...";
@@ -178,9 +178,8 @@
 			this.vscCheckBox.Size = new System.Drawing.Size(170, 19);
 			this.vscCheckBox.TabIndex = 4;
 			this.vscCheckBox.Text = "Use a volume shadow copy";
-			this.toolTip1.SetToolTip(this.vscCheckBox, "Create a shadow copy of the source volume during mirroring.\r\nThis allows to copy " +
-        "files which are locked by running processes\r\nbut requires elevated privileges an" +
-        "d Windows Vista or later.");
+			this.toolTip1.SetToolTip(this.vscCheckBox, "Create a shadow copy of the source volume while mirroring.\r\nThis allows to copy f" +
+        "iles which are locked by running processes\r\nbut requires elevated privileges.");
 			this.vscCheckBox.UseVisualStyleBackColor = true;
 			this.vscCheckBox.CheckedChanged += new System.EventHandler(this.Control_Changed);
 			// 

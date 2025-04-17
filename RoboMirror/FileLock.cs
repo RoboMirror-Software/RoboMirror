@@ -10,7 +10,8 @@ using System.IO;
 
 namespace RoboMirror
 {
-	#region FileLockedException
+	#region FileLockedException class
+
 	public class FileLockedException : Exception
 	{
 		public FileLockedException()
@@ -29,6 +30,7 @@ namespace RoboMirror
 			: base(string.Format("The file {0} is locked.", PathHelper.Quote(path)), innerException)
 		{ }
 	}
+
 	#endregion
 
 	/// <summary>

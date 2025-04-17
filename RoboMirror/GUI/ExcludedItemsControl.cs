@@ -11,7 +11,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows.Forms;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	public partial class ExcludedItemsControl : UserControl
 	{
@@ -54,7 +54,7 @@ namespace RoboMirror
 			{
 				if (!TryAddItems(ea.Paths))
 				{
-					MessageBox.Show("A dropped item is not contained in the source folder.",
+					MessageBox.Show(this, "A dropped item is not contained in the source folder.",
 						"Invalid item", MessageBoxButtons.OK, MessageBoxIcon.Error);
 				}
 			};
@@ -113,7 +113,7 @@ namespace RoboMirror
 				if (TryAddItems(new[] { folderBrowserDialog.SelectedPath }))
 					break;
 
-				MessageBox.Show("The selected folder is not contained in the source folder.",
+				MessageBox.Show(this, "The selected folder is not contained in the source folder.",
 					"Invalid subfolder", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
 				folderBrowserDialog.SelectedPath = BaseFolder;
@@ -130,7 +130,7 @@ namespace RoboMirror
 				if (TryAddItems(openFileDialog.FileNames))
 					break;
 
-				MessageBox.Show("A selected file is not contained in the source folder.",
+				MessageBox.Show(this, "A selected file is not contained in the source folder.",
 					"Invalid file", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
 				openFileDialog.InitialDirectory = BaseFolder;
@@ -171,7 +171,7 @@ namespace RoboMirror
 			if (listBox.SelectedIndices.Count == 0)
 				return;
 
-			if (MessageBox.Show("Are you sure you want to remove the selected exclusion(s)?", "Confirmation",
+			if (MessageBox.Show(this, "Are you sure you want to remove the selected exclusion(s)?", "Confirmation",
 				MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
 				return;
 
@@ -200,12 +200,12 @@ namespace RoboMirror
 			string wildcard = wildcardTextBox.Text;
 			if (wildcard.Contains(Path.DirectorySeparatorChar.ToString()))
 			{
-				MessageBox.Show("Wildcards must not contain any path information.",
+				MessageBox.Show(this, "Wildcards must not contain any path information.",
 					"Invalid wildcard", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 			else if (wildcard.Contains("\""))
 			{
-				MessageBox.Show("Wildcards must not contain any double-quotes.",
+				MessageBox.Show(this, "Wildcards must not contain any double-quotes.",
 					"Invalid wildcard", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 			else if (!listBox.Items.Contains(wildcard))

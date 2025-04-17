@@ -1,4 +1,4 @@
-﻿namespace RoboMirror
+﻿namespace RoboMirror.GUI
 {
 	partial class TaskHistoryForm
 	{
