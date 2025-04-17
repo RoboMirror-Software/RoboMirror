@@ -7,12 +7,13 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 
 namespace RoboMirror
 {
+	#region Robocopy enums
+
 	public enum RobocopySummaryColumn
 	{
 		Caption = 0,
@@ -42,30 +43,48 @@ namespace RoboMirror
 		FatalError = 16      // serious error (invalid command-line or insufficient permissions etc.)
 	}
 
+	#endregion
+
+	#region ProgressEventArgs class
+
+	/// <summary>Extends the EventArgs class by a read-only Percentage property.</summary>
+	public class ProgressEventArgs : EventArgs
+	{
+		public double Percentage { get; private set; }
+
+		public ProgressEventArgs(double percentage)
+		{
+			Percentage = percentage;
+		}
+	}
+
+	#endregion
+
+
 	/// <summary>
-	/// Wraps a Robocopy command-line process.
+	/// Wraps a hidden Robocopy process.
 	/// This class augments the ConsoleProcess class by Robocopy-specific
-	/// output parsing and an appropriate constructor for mirror task
-	/// backup/restore operations and optionally embeds Robocopy into
-	/// a VolumeShadowCopySession.
+	/// output parsing and very rough progress estimation when combined
+	/// with a prior simulation run.
 	/// This class is thread-safe.
 	/// </summary>
 	public sealed class RobocopyProcess : ConsoleProcess
 	{
-		// const after construction
-		private string _switches;
-
-		private VolumeShadowCopySession _vscSession;
+		private readonly int _expectedNumOutputLines;
+		private int _currentNumOutputLines = 0;
+		private double _lastReportedProgressPercentage = double.NegativeInfinity;
 
 		private int _outputSummaryLineIndex = -1;
 
 		/// <summary>
-		/// Gets the source folder. This may be the mirror task's target folder!
+		/// Gets the source folder. This may be the mirror task's source or target
+		/// folder or the mount point of a volume shadow copy snapshot.
 		/// </summary>
 		public string SourceFolder { get; private set; }
 
 		/// <summary>
-		/// Gets the destination folder. This may be the mirror task's source folder!
+		/// Gets the destination folder. This may be the mirror task's target or
+		/// source folder.
 		/// </summary>
 		public string DestinationFolder { get; private set; }
 
@@ -75,20 +94,71 @@ namespace RoboMirror
 		public bool PurgeExtraItems { get; private set; }
 
 
+		/// <summary>
+		/// Gets the index of the output line for the directories summary.
+		/// </summary>
+		private int OutputSummaryLineIndex
+		{
+			get
+			{
+				if (_outputSummaryLineIndex >= 0)
+					return _outputSummaryLineIndex;
+
+				lock (_syncObject)
+				{
+					if (_outputSummaryLineIndex >= 0)
+						return _outputSummaryLineIndex;
+
+					// make sure the process has exited
+					var lines = Output;
+
+					// search for the last dashed line marking the beginning of Robocopy's summary
+					for (int i = lines.Count - 1 - 7; i >= 0; --i)
+					{
+						if (lines[i].StartsWith("----------", StringComparison.Ordinal))
+						{
+							// jump to the directories line
+							_outputSummaryLineIndex = i + 3;
+							break;
+						}
+					}
+
+					return _outputSummaryLineIndex;
+				}
+			}
+		}
+
+
+		/// <summary>
+		/// Fired when the very roughly estimated progress has changed, but only
+		/// if expectedNumOutputLines passed to the constructor was &gt; 0.
+		/// Invoked asynchronously, except if the event handler is a method
+		/// of a Control instance, in which case it will be dispatched in the
+		/// thread which created the control.
+		/// Do NOT attach or detach event handlers after starting the process!
+		/// </summary>
+		public event EventHandler<ProgressEventArgs> ProgressChanged;
+
+
 		/// <param name="task">Task to be backed up/restored.</param>
-		/// <param name="reverse">
-		/// Indicates whether source and target are to be swapped, i.e.
-		/// whether this is a restore or backup operation.
+		/// <param name="expectedNumOutputLines">
+		/// Expected total number of output lines for progress estimation, e.g.,
+		/// obtained by a prior simulation run.
+		/// Required for the ProgressChanged event to be fired.
 		/// </param>
-		public RobocopyProcess(MirrorTask task, bool reverse) : base()
+		public RobocopyProcess(MirrorTask task, string sourceFolder, string destinationFolder, int expectedNumOutputLines = -1)
 		{
 			if (task == null)
 				throw new ArgumentNullException("task");
+			if (string.IsNullOrEmpty(sourceFolder))
+				throw new ArgumentNullException("sourceFolder");
+			if (string.IsNullOrEmpty(destinationFolder))
+				throw new ArgumentNullException("destinationFolder");
 
-			if (!Directory.Exists(task.Source))
-				throw new InvalidOperationException(string.Format("The source folder {0} does not exist.", PathHelper.Quote(task.Source)));
-			if (!Directory.Exists(task.Target))
-				throw new InvalidOperationException(string.Format("The target folder {0} does not exist.", PathHelper.Quote(task.Target)));
+			if (!Directory.Exists(sourceFolder))
+				throw new InvalidOperationException(string.Format("The source folder {0} does not exist.", PathHelper.Quote(sourceFolder)));
+			if (!Directory.Exists(destinationFolder))
+				throw new InvalidOperationException(string.Format("The destination folder {0} does not exist.", PathHelper.Quote(destinationFolder)));
 
 			// only use the bundled Robocopy version if the system does not ship with one
 			string exePath = Path.Combine(Environment.SystemDirectory, "Robocopy.exe");
@@ -100,20 +170,24 @@ namespace RoboMirror
 					throw new InvalidOperationException(string.Format("{0} does not exist.", PathHelper.Quote(exePath)));
 			}
 
-			StartInfo.FileName = exePath;
+#if DEBUG
+			exePath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "DummyConsoleProcess.exe");
+#endif
 
-			SourceFolder = (reverse ? task.Target : task.Source);
-			DestinationFolder = (reverse ? task.Source : task.Target);
-			_switches = BuildSwitches(task, SourceFolder);
+			SourceFolder = sourceFolder;
+			DestinationFolder = destinationFolder;
 			PurgeExtraItems = task.DeleteExtraItems;
 
+			_expectedNumOutputLines = expectedNumOutputLines;
+
+			StartInfo.FileName = exePath;
 			StartInfo.Arguments = string.Format("{0} {1} {2}", PathHelper.QuoteForRobocopy(SourceFolder),
-				PathHelper.QuoteForRobocopy(DestinationFolder), _switches);
+				PathHelper.QuoteForRobocopy(DestinationFolder), BuildSwitches(task, SourceFolder));
 		}
 
-		/// <summary>
-		/// Builds the command-line switches for Robocopy.
-		/// </summary>
+		#region Building the command-line switches (static)
+
+		/// <summary>Builds the command-line switches for Robocopy.</summary>
 		private static string BuildSwitches(MirrorTask task, string sourceFolder)
 		{
 			string basicSwitches = string.IsNullOrEmpty(task.CustomRobocopySwitches)
@@ -187,20 +261,8 @@ namespace RoboMirror
 			arguments.Append(PathHelper.QuoteForRobocopy(pathOrWildcard, force: true));
 		}
 
+		#endregion
 
-		/// <summary>
-		/// Kills the process if it is currently running and releases all
-		/// used resources.
-		/// </summary>
-		public override void Dispose()
-		{
-			base.Dispose();
-
-			// make sure the volume shadow copy is deleted
-			// (disposing is thread-safe and repeatable)
-			if (_vscSession != null)
-				_vscSession.Dispose();
-		}
 
 		/// <summary>
 		/// Indicates whether any of the specified flags is set in Robocopy's exit code.
@@ -217,9 +279,9 @@ namespace RoboMirror
 		/// </summary>
 		public string GetSummary(RobocopySummaryRow row, RobocopySummaryColumn column)
 		{
-			string defaultValue = "NaN";
+			const string defaultValue = "NaN";
 
-			int baseRowIndex = GetOutputSummaryLineIndex();
+			int baseRowIndex = OutputSummaryLineIndex;
 			if (baseRowIndex < 0)
 				return defaultValue;
 
@@ -237,128 +299,39 @@ namespace RoboMirror
 
 				return rawValue;
 			}
-			catch
-			{
-				return defaultValue;
-			}
+			catch { return defaultValue; }
 		}
 
-		private int GetOutputSummaryLineIndex()
-		{
-			if (_outputSummaryLineIndex >= 0)
-				return _outputSummaryLineIndex;
 
-			// make sure parsing is thread-safe
+		/// <summary>
+		/// Invoked asynchronously when the process has written a line to stdout or stderr.
+		/// Implements a very rough progress estimation system based on the current number
+		/// of output lines and a total estimate.
+		/// </summary>
+		protected override void OnLineWritten(System.Diagnostics.DataReceivedEventArgs e)
+		{
+			const double MIN_PERCENTAGE_DELTA = 0.1;
+
+			base.OnLineWritten(e);
+
+			if (_expectedNumOutputLines <= 0 || ProgressChanged == null)
+				return;
+
+			double expectedPercentage;
 			lock (_syncObject)
 			{
-				if (_outputSummaryLineIndex >= 0)
-					return _outputSummaryLineIndex;
+				int numLines = ++_currentNumOutputLines;
+				expectedPercentage = (100.0 * numLines) / _expectedNumOutputLines;
 
-				var lines = Output;
+				if (expectedPercentage - _lastReportedProgressPercentage < MIN_PERCENTAGE_DELTA
+					|| _lastReportedProgressPercentage >= 100) // no more progress reports if last percentage >= 100%
+					return;
 
-				// search for the last dashed line marking the beginning of Robocopy's summary
-				for (int i = lines.Count - 1 - 7; i >= 0; --i)
-				{
-					if (lines[i].StartsWith("----------", StringComparison.Ordinal))
-					{
-						// jump to the directories line
-						_outputSummaryLineIndex = i + 3;
-						break;
-					}
-				}
+				expectedPercentage = Math.Min(100, expectedPercentage); // max 100%
+				_lastReportedProgressPercentage = expectedPercentage;
 			}
 
-			return _outputSummaryLineIndex;
+			SmartEventInvoker.FireEvent(ProgressChanged, this, new ProgressEventArgs(expectedPercentage));
 		}
-
-
-		/// <summary>
-		/// Invoked asynchronously when the process has exited.
-		/// </summary>
-		protected override void OnExited(EventArgs e)
-		{
-			// fire the event
-			base.OnExited(e);
-
-			// delete the volume shadow copy
-			// (disposing is thread-safe and repeatable)
-			if (_vscSession != null)
-				_vscSession.Dispose();
-		}
-
-
-		#region Embedding into a VolumeShadowCopySession.
-
-		/// <summary>
-		/// Starts the process asynchronously, embedded into a volume
-		/// shadow copy session.
-		/// This method is NOT thread-safe, call it only once per instance
-		/// and do not call the Start() method afterwards.
-		/// </summary>
-		/// <param name="onError">
-		/// Event handler to be invoked if either the shadow copy could not be
-		/// created/mounted or if Robocopy could not be started.
-		/// </param>
-		public void StartInVscSession(EventHandler<TextEventArgs> onError)
-		{
-			if (onError == null)
-				throw new ArgumentNullException("onError");
-
-			if (HasStarted)
-				throw new InvalidOperationException("The process has already been started.");
-
-			string sourceVolume = GetSourceVolume();
-
-			// create a session
-			_vscSession = new VolumeShadowCopySession();
-			_vscSession.Ready += VscSession_Ready;
-			_vscSession.Aborted += onError;
-
-			// create and mount the shadow copy
-			_vscSession.Start(sourceVolume);
-		}
-
-		/// <summary>
-		/// Invoked asynchronously when the volume shadow copy has been
-		/// created and mounted.
-		/// </summary>
-		private void VscSession_Ready(object sender, EventArgs e)
-		{
-			string sourceVolume = GetSourceVolume();
-
-			// replace all occurrences of the source volume in the command-line
-			// arguments (excluding the destination folder) by the mount point
-			StartInfo.Arguments = string.Format("{0} {1} {2}",
-				PathHelper.QuoteForRobocopy(SourceFolder.Replace(sourceVolume, _vscSession.MountPoint)),
-				PathHelper.QuoteForRobocopy(DestinationFolder),
-				_switches.Replace(sourceVolume + Path.DirectorySeparatorChar, _vscSession.MountPoint + Path.DirectorySeparatorChar));
-
-			// start Robocopy, making sure the shadow copy is deleted
-			// immediately if Robocopy cannot be started
-			try
-			{
-				Start();
-			}
-			catch (Exception exception)
-			{
-				// dispose of the session and fire the session's Aborted event,
-				// which will invoke the onError delegate supplied to the
-				// StartInVscSession() method
-				// (disposing is thread-safe and repeatable)
-				_vscSession.OnAborted(new TextEventArgs("Robocopy could not be started:\n\n" +
-					exception.Message));
-			}
-		}
-
-		private string GetSourceVolume()
-		{
-			string r = Path.GetPathRoot(SourceFolder);
-			// remove a trailing directory separator character
-			if (r[r.Length - 1] == Path.DirectorySeparatorChar)
-				r = r.Substring(0, r.Length - 1);
-			return r;
-		}
-
-		#endregion
 	}
 }

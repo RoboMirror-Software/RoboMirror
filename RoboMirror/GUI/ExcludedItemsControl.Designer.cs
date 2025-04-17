@@ -1,4 +1,4 @@
-﻿namespace RoboMirror
+﻿namespace RoboMirror.GUI
 {
 	partial class ExcludedItemsControl
 	{
@@ -44,10 +44,10 @@
 			// wildcardTextBox
 			// 
 			this.wildcardTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-			this.wildcardTextBox.Location = new System.Drawing.Point(7, 94);
+			this.wildcardTextBox.Location = new System.Drawing.Point(6, 94);
 			this.wildcardTextBox.Margin = new System.Windows.Forms.Padding(0);
 			this.wildcardTextBox.Name = "wildcardTextBox";
-			this.wildcardTextBox.Size = new System.Drawing.Size(93, 20);
+			this.wildcardTextBox.Size = new System.Drawing.Size(102, 20);
 			this.wildcardTextBox.TabIndex = 2;
 			this.wildcardTextBox.TextChanged += new System.EventHandler(this.wildcardTextBox_TextChanged);
 			// 
@@ -58,7 +58,7 @@
 			this.listBox.Location = new System.Drawing.Point(0, 0);
 			this.listBox.Name = "listBox";
 			this.listBox.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
-			this.listBox.Size = new System.Drawing.Size(329, 143);
+			this.listBox.Size = new System.Drawing.Size(321, 143);
 			this.listBox.Sorted = true;
 			this.listBox.TabIndex = 0;
 			this.listBox.SelectedIndexChanged += new System.EventHandler(this.listBox_SelectedIndexChanged);
@@ -70,11 +70,11 @@
 			this.removeButton.Enabled = false;
 			this.removeButton.Image = global::RoboMirror.Properties.Resources.delete2;
 			this.removeButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			this.removeButton.Location = new System.Drawing.Point(6, 29);
+			this.removeButton.Location = new System.Drawing.Point(5, 29);
 			this.removeButton.Margin = new System.Windows.Forms.Padding(0);
 			this.removeButton.Name = "removeButton";
-			this.removeButton.Padding = new System.Windows.Forms.Padding(4, 0, 8, 0);
-			this.removeButton.Size = new System.Drawing.Size(94, 23);
+			this.removeButton.Padding = new System.Windows.Forms.Padding(9, 0, 20, 0);
+			this.removeButton.Size = new System.Drawing.Size(103, 23);
 			this.removeButton.TabIndex = 1;
 			this.removeButton.Text = "Remove";
 			this.removeButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
@@ -88,11 +88,11 @@
 			this.addWildcardButton.Enabled = false;
 			this.addWildcardButton.Image = global::RoboMirror.Properties.Resources.document_find;
 			this.addWildcardButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			this.addWildcardButton.Location = new System.Drawing.Point(6, 120);
+			this.addWildcardButton.Location = new System.Drawing.Point(5, 120);
 			this.addWildcardButton.Margin = new System.Windows.Forms.Padding(0);
 			this.addWildcardButton.Name = "addWildcardButton";
-			this.addWildcardButton.Padding = new System.Windows.Forms.Padding(4, 0, 1, 0);
-			this.addWildcardButton.Size = new System.Drawing.Size(94, 23);
+			this.addWildcardButton.Padding = new System.Windows.Forms.Padding(9, 0, 4, 0);
+			this.addWildcardButton.Size = new System.Drawing.Size(103, 23);
 			this.addWildcardButton.TabIndex = 3;
 			this.addWildcardButton.Text = "Add wildcard";
 			this.addWildcardButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
@@ -115,10 +115,10 @@
 			this.rightPanel.Controls.Add(this.wildcardTextBox);
 			this.rightPanel.Controls.Add(this.addWildcardButton);
 			this.rightPanel.Dock = System.Windows.Forms.DockStyle.Right;
-			this.rightPanel.Location = new System.Drawing.Point(329, 0);
+			this.rightPanel.Location = new System.Drawing.Point(321, 0);
 			this.rightPanel.Margin = new System.Windows.Forms.Padding(0);
 			this.rightPanel.Name = "rightPanel";
-			this.rightPanel.Size = new System.Drawing.Size(100, 143);
+			this.rightPanel.Size = new System.Drawing.Size(108, 143);
 			this.rightPanel.TabIndex = 1;
 			// 
 			// browseButton
@@ -126,11 +126,11 @@
 			this.browseButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
 			this.browseButton.Image = global::RoboMirror.Properties.Resources.folder_view;
 			this.browseButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			this.browseButton.Location = new System.Drawing.Point(6, 0);
+			this.browseButton.Location = new System.Drawing.Point(5, 0);
 			this.browseButton.Margin = new System.Windows.Forms.Padding(0);
 			this.browseButton.Name = "browseButton";
-			this.browseButton.Padding = new System.Windows.Forms.Padding(4, 0, 4, 0);
-			this.browseButton.Size = new System.Drawing.Size(94, 23);
+			this.browseButton.Padding = new System.Windows.Forms.Padding(9, 0, 17, 0);
+			this.browseButton.Size = new System.Drawing.Size(103, 23);
 			this.browseButton.TabIndex = 0;
 			this.browseButton.Text = "Browse...";
 			this.browseButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;

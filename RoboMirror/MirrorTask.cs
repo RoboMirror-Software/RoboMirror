@@ -18,7 +18,7 @@ namespace RoboMirror
 	/// </summary>
 	public sealed class MirrorTask
 	{
-		#region Properties.
+		#region Properties
 
 		/// <summary>
 		/// Gets the globally unique ID of this task.

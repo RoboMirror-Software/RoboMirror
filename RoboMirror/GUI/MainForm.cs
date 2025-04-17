@@ -11,7 +11,7 @@ using System.Windows.Forms;
 using RoboMirror.Properties;
 using Microsoft.Win32.TaskScheduler;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Main form of the application.
@@ -145,7 +145,7 @@ namespace RoboMirror
 			if (listView1.SelectedIndices.Count == 0)
 				return;
 
-			if (MessageBox.Show("Are you sure you want to remove the selected task?", "Confirmation",
+			if (MessageBox.Show(this, "Are you sure you want to remove the selected task?", "Confirmation",
 				MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
 				return;
 
@@ -190,12 +190,12 @@ namespace RoboMirror
 
 		private void backupButton_Click(object sender, EventArgs e)
 		{
-			StartOperation(false, Settings.Default.SimulateFirst);
+			StartOperation(reverse: false, simulateFirst: Settings.Default.SimulateFirst);
 		}
 
 		private void restoreButton_Click(object sender, EventArgs e)
 		{
-			StartOperation(true, true);
+			StartOperation(reverse: true, simulateFirst: Settings.Default.SimulateFirst);
 		}
 
 
@@ -219,7 +219,7 @@ namespace RoboMirror
 			if (GetAssociatedActiveOperation(task) != null)
 				return;
 
-			var operation = new MirrorOperation(task, reverse);
+			var operation = new MirrorOperation(this, task, reverse);
 
 			operation.Finished += Operation_Finished;
 
@@ -254,7 +254,7 @@ namespace RoboMirror
 		/// </summary>
 		private void AddListViewItem(MirrorTask task)
 		{
-			ListViewItem item = new ListViewItem();
+			var item = new ListViewItem();
 			item.Tag = task;
 			item.ImageIndex = 0;
 			item.SubItems.Add(task.Source);
@@ -286,21 +286,49 @@ namespace RoboMirror
 
 		protected override void OnFormClosing(FormClosingEventArgs e)
 		{
- 			base.OnFormClosing(e);
+			base.OnFormClosing(e);
 
 			if (e.Cancel)
 				return;
 
-			foreach (var operation in _activeOperations)
+			// * Task Manager:
+			// beginning with Windows 8, the task manager ends tasks just like the user would
+			// (i.e., sending WM_SYSCOMMAND before WM_CLOSE - this is why e.CloseReason is
+			// UserClosing instead of TaskManagerClosing!), but uses a rather short time-out
+			// after which the thread seems to be killed
+			// so we cannot distinguish between task manager kills and normal user closings
+			// anymore
+			// so on a task manager kill on Win8+ and if there are active operations, our app
+			// will shortly display a confirmation message box before being terminated brutally
+
+			// * Windows logoff/shutdown/restart:
+			// although a logoff may be cancelled, it makes no sense as external Robocopy
+			// processes are killed anyway
+			// so simply do not prompt and then abort in OnFormClosed()
+
+			if (_activeOperations.Count > 0 && e.CloseReason == CloseReason.UserClosing)
 			{
-				if (!operation.Abort())
+				if (MessageBox.Show(this, "Are you sure you want to abort all active operations?",
+					"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) !=
+					DialogResult.Yes)
 				{
 					e.Cancel = true;
 					return;
 				}
 			}
+		}
+
+		protected override void OnFormClosed(FormClosedEventArgs e)
+		{
+			// copy _activeOperations to a new array
+			// reason: aborting an operation will finish it, and Operation_Finished()
+			// removes the operation from the _activeOperations list
+			foreach (var operation in _activeOperations.ToArray())
+				operation.Abort();
 
 			_taskManager.Dispose();
+
+			base.OnFormClosed(e);
 		}
 	}
 }

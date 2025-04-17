@@ -6,58 +6,50 @@
  */
 
 using System;
-using System.Diagnostics;
 using System.Windows.Forms;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Executes a scheduled backup in the background while still
 	/// providing a minimal GUI (the task tray icon).
+	/// The form itself will be hidden and is only used for proper process
+	/// lifetime management (incl. Windows logoff/shutdown/restart).
 	/// </summary>
-	public sealed class ScheduledBackupExecutor : ApplicationContext
+	public sealed class ScheduledBackupExecutor : Form
 	{
 		private MirrorOperation _operation;
 
-
-		/// <summary>
-		/// Creates a new ScheduledBackupExecutor.
-		/// </summary>
 		/// <param name="guid">GUID of the task to be backed up.</param>
 		public ScheduledBackupExecutor(string guid)
 		{
 			MirrorTask task = null;
 			using (var taskManager = new TaskManager(true))
-			{
 				task = taskManager.LoadTask(guid);
-			}
 
 			if (task == null)
 				throw new InvalidOperationException("The task does not exist in the XML file.");
 
-			_operation = new MirrorOperation(task, false);
-			_operation.Finished += Operation_Finished;
+			_operation = new MirrorOperation(this, task, false);
+			_operation.Finished += OnOperationFinished;
 
-			_operation.Start(false);
+			ShowInTaskbar = false;
+			WindowState = FormWindowState.Minimized;
 		}
 
-		/// <summary>
-		/// Makes sure the operation is disposed of before exiting the application.
-		/// </summary>
-		protected override void Dispose(bool disposing)
+		protected override void OnLoad(EventArgs e)
 		{
-			if (disposing && _operation != null)
-			{
-				_operation.Dispose();
-				_operation = null;
-			}
+			_operation.Start(simulateFirst: false);
+			base.OnLoad(e);
 		}
 
+		protected override void OnClosed(EventArgs e)
+		{
+			_operation.Abort();
+			base.OnClosed(e);
+		}
 
-		/// <summary>
-		/// Invoked when the operation has finished.
-		/// </summary>
-		private void Operation_Finished(object sender, FinishedEventArgs e)
+		private void OnOperationFinished(object sender, FinishedEventArgs e)
 		{
 			if (e.Success)
 			{
@@ -75,7 +67,7 @@ namespace RoboMirror
 				{
 					try
 					{
-						Log.WriteEntry(_operation.Task, EventLogEntryType.Warning,
+						Log.WriteEntry(_operation.Task.Guid, System.Diagnostics.EventLogEntryType.Warning,
 							"The last successful operation time stamp could not be updated: " + exception.Message, null);
 					}
 					catch
@@ -86,8 +78,7 @@ namespace RoboMirror
 				}
 			}
 
-			// exit the application
-			ExitThread();
+			Close();
 		}
 	}
 }

@@ -13,6 +13,20 @@ namespace RoboMirror
 	public static class PathHelper
 	{
 		/// <summary>
+		/// Returns true if the specified path is valid and absolute.
+		/// Does not check whether the file or directory exists.
+		/// </summary>
+		public static bool IsValidAbsolutePath(string path)
+		{
+			if (string.IsNullOrEmpty(path))
+				return false;
+
+			try { return Path.IsPathRooted(path); }
+			// invalid path
+			catch (ArgumentException) { return false; }
+		}
+
+		/// <summary>
 		/// Corrects a path provided by the user.
 		/// </summary>
 		public static string CorrectPath(string path)
@@ -25,7 +39,7 @@ namespace RoboMirror
 				.Trim('"');                                       // eliminate all leading and trailing double-quotes
 
 			// X: => X:\
-			if (path.Length == 2 && char.IsLetter(path[0]) && path[1] == Path.VolumeSeparatorChar)
+			if (path.Length == 2 && char.IsLetter(path[0]) && path[1] == ':')
 				return path + Path.DirectorySeparatorChar;
 
 			try
@@ -36,6 +50,20 @@ namespace RoboMirror
 			catch { return path; }
 		}
 
+		public static bool EndsWithSeparator(string path)
+		{
+			return (!string.IsNullOrEmpty(path) && path[path.Length - 1] == Path.DirectorySeparatorChar);
+		}
+
+		public static string RemoveTrailingSeparator(string path)
+		{
+			return (!EndsWithSeparator(path) ? path : path.Substring(0, path.Length - 1));
+		}
+
+		public static string AppendSeparator(string path)
+		{
+			return (EndsWithSeparator(path) ? path : path + Path.DirectorySeparatorChar);
+		}
 
 		/// <summary>
 		/// Returns true if the specified path is contained by the specified folder or the folder itself.
@@ -55,10 +83,7 @@ namespace RoboMirror
 			var comparison = (Path.DirectorySeparatorChar == '\\' ?
 				StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-			string prefix = folder;
-			if (!prefix.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal))
-				prefix += Path.DirectorySeparatorChar;
-
+			string prefix = AppendSeparator(folder);
 			if (!path.StartsWith(prefix, comparison))
 				return false;
 

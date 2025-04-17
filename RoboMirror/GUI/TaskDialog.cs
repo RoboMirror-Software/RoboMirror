@@ -11,7 +11,7 @@ using System.Windows.Forms;
 using System.IO;
 using System.Globalization;
 
-namespace RoboMirror
+namespace RoboMirror.GUI
 {
 	/// <summary>
 	/// Allows editing of a mirror task.
@@ -46,11 +46,7 @@ namespace RoboMirror
 			if (!string.IsNullOrEmpty(_task.Source))
 				sourceFolderTextBox.Text = _task.Source;
 
-			// persistent volume shadow copies are supported since Windows Vista
-			if (Environment.OSVersion.Version.Major < 6)
-				vscCheckBox.Enabled = false;
-			else
-				vscCheckBox.Checked = _task.UseVolumeShadowCopy;
+			vscCheckBox.Checked = _task.UseVolumeShadowCopy;
 
 			// set up the target
 			if (!string.IsNullOrEmpty(_task.Target))
@@ -166,7 +162,7 @@ namespace RoboMirror
 			string source = PathHelper.CorrectPath(sourceFolderTextBox.Text);
 			if (!Directory.Exists(source))
 			{
-				MessageBox.Show("The source folder does not exist.", "Invalid source folder",
+				MessageBox.Show(this, "The source folder does not exist.", "Invalid source folder",
 					MessageBoxButtons.OK, MessageBoxIcon.Error);
 				sourceFolderTextBox.Focus();
 				return false;
@@ -175,7 +171,7 @@ namespace RoboMirror
 			string target = PathHelper.CorrectPath(targetFolderTextBox.Text);
 			if (!Directory.Exists(target))
 			{
-				MessageBox.Show("The target folder does not exist.", "Invalid target folder",
+				MessageBox.Show(this, "The target folder does not exist.", "Invalid target folder",
 					MessageBoxButtons.OK, MessageBoxIcon.Error);
 				targetFolderTextBox.Focus();
 				return false;
@@ -184,7 +180,7 @@ namespace RoboMirror
 			string relativePath;
 			if (PathHelper.IsInFolder(target, source, out relativePath))
 			{
-				MessageBox.Show("The target folder must not be in the source folder.",
+				MessageBox.Show(this, "The target folder must not be in the source folder.",
 					"Invalid target folder", MessageBoxButtons.OK, MessageBoxIcon.Error);
 				targetFolderTextBox.Focus();
 				return false;

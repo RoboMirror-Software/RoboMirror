@@ -13,9 +13,7 @@ namespace RoboMirror
 {
 	static class Program
 	{
-		/// <summary>
-		/// The main entry point for the application.
-		/// </summary>
+		/// <summary>The main entry point for the application.</summary>
 		[STAThread]
 		static void Main()
 		{
@@ -30,11 +28,11 @@ namespace RoboMirror
 			if (args.Length == 2)
 			{
 				// the argument is most likely a GUID of a task scheduled for backup
-				ScheduledBackupExecutor executor;
+				GUI.ScheduledBackupExecutor form;
 
 				try
 				{
-					executor = new ScheduledBackupExecutor(args[1]);
+					form = new GUI.ScheduledBackupExecutor(args[1]);
 				}
 				catch (InvalidOperationException e)
 				{
@@ -44,15 +42,15 @@ namespace RoboMirror
 					return;
 				}
 
-				Application.Run(executor);
+				Application.Run(form);
 			}
 			else
 			{
-				MainForm form;
+				GUI.MainForm form;
 
 				try
 				{
-					form = new MainForm();
+					form = new GUI.MainForm();
 				}
 				catch (FileLockedException)
 				{
@@ -88,10 +86,7 @@ namespace RoboMirror
 		{
 			try
 			{
-				var exception = e as Exception;
-				string msg = "Oops, an unexpected error has occurred:\n\n" +
-					(exception != null ? exception.ToString() : e.GetType().FullName);
-
+				string msg = "Oops, an unexpected error has occurred:\n\n" + e.ToString();
 				MessageBox.Show(msg, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 			catch {}

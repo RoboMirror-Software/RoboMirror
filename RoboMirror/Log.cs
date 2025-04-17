@@ -13,7 +13,7 @@ using System.Xml;
 
 namespace RoboMirror
 {
-	#region LogEntry class.
+	#region LogEntry class
 
 	/// <summary>
 	/// Represents a RoboMirror-specific event log entry.
@@ -63,16 +63,13 @@ namespace RoboMirror
 		private static readonly string PATH = Path.Combine("RoboMirror", "Log.xml");
 
 
-		#region Static stuff.
+		#region Static stuff
 
-		/// <summary>
-		/// Writes the specified entry to the log.
-		/// </summary>
-		/// <param name="task">Associated mirror task.</param>
-		/// <param name="entry">Entry to be written.</param>
-		public static void WriteEntry(MirrorTask task, EventLogEntryType type,
+		public static void WriteEntry(string taskGuid, EventLogEntryType type,
 			string message, string data)
 		{
+			if (string.IsNullOrEmpty(taskGuid))
+				throw new ArgumentNullException("taskGuid");
 			if (string.IsNullOrEmpty(message))
 				throw new ArgumentNullException("message");
 
@@ -91,7 +88,7 @@ namespace RoboMirror
 				{
 					using (var log = new Log(false))
 					{
-						log.Write(task, entry);
+						log.Write(taskGuid, entry);
 					}
 					break;
 				}
@@ -105,14 +102,14 @@ namespace RoboMirror
 			}
 		}
 
-		/// <summary>
-		/// Loads all entries associated with the specified mirror task.
-		/// </summary>
-		public static List<LogEntry> LoadEntries(MirrorTask task)
+		public static List<LogEntry> LoadEntries(string taskGuid)
 		{
+			if (string.IsNullOrEmpty(taskGuid))
+				throw new ArgumentNullException("taskGuid");
+
 			using (var log = new Log(true))
 			{
-				return log.Load(task);
+				return log.Load(taskGuid);
 			}
 		}
 
@@ -121,13 +118,16 @@ namespace RoboMirror
 		/// Logs a Robocopy run.
 		/// </summary>
 		/// <param name="process">Terminated Robocopy process.</param>
-		/// <param name="task">Task associated with the operation.</param>
-		public static void LogRun(RobocopyProcess process, MirrorTask task)
+		public static void LogRun(string taskGuid, RobocopyProcess process, string sourceFolder, string destinationFolder)
 		{
+			if (string.IsNullOrEmpty(taskGuid))
+				throw new ArgumentNullException("taskGuid");
 			if (process == null)
 				throw new ArgumentNullException("process");
-			if (task == null)
-				throw new ArgumentNullException("task");
+			if (string.IsNullOrEmpty(sourceFolder))
+				throw new ArgumentNullException("sourceFolder");
+			if (string.IsNullOrEmpty(destinationFolder))
+				throw new ArgumentNullException("destinationFolder");
 
 			EventLogEntryType type;
 			string messageFormat;
@@ -164,10 +164,10 @@ namespace RoboMirror
 			}
 
 			string message = string.Format(messageFormat,
-				PathHelper.Quote(process.SourceFolder),
-				PathHelper.Quote(process.DestinationFolder));
+				PathHelper.Quote(sourceFolder),
+				PathHelper.Quote(destinationFolder));
 
-			WriteEntry(task, type, message, process.FullOutput);
+			WriteEntry(taskGuid, type, message, process.FullOutput);
 		}
 
 		#endregion
@@ -179,15 +179,10 @@ namespace RoboMirror
 		{ }
 
 
-		/// <summary>
-		/// Writes the specified entry to the log.
-		/// </summary>
-		/// <param name="task">Associated mirror task.</param>
-		/// <param name="entry">Entry to be written.</param>
-		public void Write(MirrorTask task, LogEntry entry)
+		public void Write(string taskGuid, LogEntry entry)
 		{
-			if (task == null)
-				throw new ArgumentNullException("task");
+			if (string.IsNullOrEmpty(taskGuid))
+				throw new ArgumentNullException("taskGuid");
 			if (entry == null)
 				throw new ArgumentNullException("entry");
 
@@ -195,7 +190,7 @@ namespace RoboMirror
 			Document.DocumentElement.AppendChild(entryNode);
 
 			var attribute = Document.CreateAttribute("taskGuid");
-			attribute.Value = task.Guid;
+			attribute.Value = taskGuid;
 			entryNode.Attributes.Append(attribute);
 
 			var node = Document.CreateElement("timeStamp");
@@ -220,16 +215,13 @@ namespace RoboMirror
 			Save();
 		}
 
-		/// <summary>
-		/// Loads all entries associated with the specified mirror task.
-		/// </summary>
-		public List<LogEntry> Load(MirrorTask task)
+		public List<LogEntry> Load(string taskGuid)
 		{
-			if (task == null)
-				throw new ArgumentNullException("task");
+			if (string.IsNullOrEmpty(taskGuid))
+				throw new ArgumentNullException("taskGuid");
 
 			var entries = Document.DocumentElement.SelectNodes(
-				string.Format("entry[@taskGuid=\"{0}\"]", task.Guid));
+				string.Format("entry[@taskGuid=\"{0}\"]", taskGuid));
 
 			var list = new List<LogEntry>(entries.Count);
 

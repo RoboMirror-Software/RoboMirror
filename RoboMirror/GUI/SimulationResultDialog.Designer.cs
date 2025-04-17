@@ -1,4 +1,4 @@
-﻿namespace RoboMirror
+﻿namespace RoboMirror.GUI
 {
 	partial class SimulationResultDialog
 	{
@@ -60,7 +60,7 @@
 			this.abortButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
 			this.abortButton.Location = new System.Drawing.Point(519, 351);
 			this.abortButton.Name = "abortButton";
-			this.abortButton.Padding = new System.Windows.Forms.Padding(9, 0, 24, 0);
+			this.abortButton.Padding = new System.Windows.Forms.Padding(15, 0, 28, 0);
 			this.abortButton.Size = new System.Drawing.Size(117, 37);
 			this.abortButton.TabIndex = 14;
 			this.abortButton.Text = "Abort";
@@ -100,7 +100,7 @@
 			this.proceedButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
 			this.proceedButton.Location = new System.Drawing.Point(384, 351);
 			this.proceedButton.Name = "proceedButton";
-			this.proceedButton.Padding = new System.Windows.Forms.Padding(9, 0, 17, 0);
+			this.proceedButton.Padding = new System.Windows.Forms.Padding(15, 0, 18, 0);
 			this.proceedButton.Size = new System.Drawing.Size(117, 37);
 			this.proceedButton.TabIndex = 13;
 			this.proceedButton.Text = "Proceed";
