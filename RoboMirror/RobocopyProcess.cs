@@ -86,8 +86,7 @@ namespace RoboMirror
 		/// </param>
 		public RobocopyProcess(MirrorTask task, bool reverse) :
 			base(CreateStartInfo(task, reverse))
-		{
-		}
+		{ }
 
 		#region Static ProcessStartInfo creation.
 
@@ -99,16 +98,15 @@ namespace RoboMirror
 		/// Indicates whether source and target are to be swapped, i.e.
 		/// whether this will be a restore or backup operation.
 		/// </param>
-		/// <returns></returns>
 		private static ProcessStartInfo CreateStartInfo(MirrorTask task, bool reverse)
 		{
 			if (task == null)
 				throw new ArgumentNullException("task");
 
 			if (!Directory.Exists(task.Source))
-				throw new InvalidOperationException("The source folder does not exist.");
+				throw new InvalidOperationException(string.Format("The source folder \"{0}\" does not exist.", task.Source));
 			if (!Directory.Exists(task.Target))
-				throw new InvalidOperationException("The target folder does not exist.");
+				throw new InvalidOperationException(string.Format("The target folder \"{0}\" does not exist.", task.Target));
 
 			var startInfo = new ProcessStartInfo();
 
@@ -131,11 +129,9 @@ namespace RoboMirror
 			arguments.AppendFormat("\"{0}\" \"{1}\" {2}", source, destination,
 				Properties.Settings.Default.RobocopySwitches);
 
-			if (!string.IsNullOrEmpty(task.ExcludedAttributes))
-			{
-				arguments.Append(" /xa:");
-				arguments.Append(task.ExcludedAttributes);
-			}
+			// if supported, use restartable mode and fall back to backup mode
+			if (UacHelper.IsRobocopyBackupModeSupported())
+				arguments.Append(" /zb");
 
 			if (!string.IsNullOrEmpty(task.ExtendedAttributes))
 			{
@@ -143,48 +139,44 @@ namespace RoboMirror
 				arguments.Append(task.ExtendedAttributes);
 			}
 
-			if (task.Exclusions.Count > 0)
+			if (task.DeleteExtraItems)
+				arguments.Append(" /purge");
+
+			if (!string.IsNullOrEmpty(task.ExcludedAttributes))
 			{
-				var files = new List<string>();
-				var folders = new List<string>();
+				arguments.Append(" /xa:");
+				arguments.Append(task.ExcludedAttributes);
+			}
 
-				foreach (string item in task.Exclusions)
+			if (task.ExcludedFiles.Count > 0)
+			{
+				arguments.Append(" /xf");
+				foreach (string file in task.ExcludedFiles)
 				{
-					if (item[0] == Path.DirectorySeparatorChar &&
-						Directory.Exists(source + item))
-					{
-						folders.Add(item);
-					}
-					else
-						files.Add(item);
-				}
+					arguments.Append(" \"");
 
-				if (files.Count > 0)
-				{
-					arguments.Append(" /xf");
-					foreach (string file in files)
-					{
-						arguments.Append(" \"");
-
-						// wildcards must not contain any path information
-						if (file[0] == Path.DirectorySeparatorChar)
-							arguments.Append(source);
-
-						arguments.Append(file);
-						arguments.Append('\"');
-					}
-				}
-
-				if (folders.Count > 0)
-				{
-					arguments.Append(" /xd");
-					foreach (string folder in folders)
-					{
-						arguments.Append(" \"");
+					// wildcards must not contain any path information
+					if (file[0] == Path.DirectorySeparatorChar)
 						arguments.Append(source);
-						arguments.Append(folder);
-						arguments.Append('\"');
-					}
+
+					arguments.Append(file);
+					arguments.Append('\"');
+				}
+			}
+
+			if (task.ExcludedFolders.Count > 0)
+			{
+				arguments.Append(" /xd");
+				foreach (string folder in task.ExcludedFolders)
+				{
+					arguments.Append(" \"");
+
+					// wildcards must not contain any path information
+					if (folder[0] == Path.DirectorySeparatorChar)
+						arguments.Append(source);
+
+					arguments.Append(folder);
+					arguments.Append('\"');
 				}
 			}
 
@@ -241,9 +233,12 @@ namespace RoboMirror
 					string filesSummaryLine = lines[summaryLineIndex + 1];
 
 					// split the lines
-					var foldersStats = foldersSummaryLine.Substring(11).Split(new char[] { ' ' },
+					int foldersSeparatorIndex = foldersSummaryLine.IndexOf(':');
+					int filesSeparatorIndex = filesSummaryLine.IndexOf(':');
+
+					var foldersStats = foldersSummaryLine.Substring(foldersSeparatorIndex + 1).Split(new char[] { ' ' },
 						StringSplitOptions.RemoveEmptyEntries);
-					var filesStats = filesSummaryLine.Substring(11).Split(new char[] { ' ' },
+					var filesStats = filesSummaryLine.Substring(filesSeparatorIndex + 1).Split(new char[] { ' ' },
 						StringSplitOptions.RemoveEmptyEntries);
 
 					_transfersCount = int.Parse(filesStats[1]) +
@@ -266,13 +261,12 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked asynchronously when the process has exited.
 		/// </summary>
-		/// <param name="e"></param>
 		protected override void OnExited(EventArgs e)
 		{
 			// fire the event
 			base.OnExited(e);
 
-			// immediately delete the volume shadow copy
+			// delete the volume shadow copy
 			// (disposing is thread-safe and repeatable)
 			if (_vscSession != null)
 				_vscSession.Dispose();
@@ -333,7 +327,7 @@ namespace RoboMirror
 
 			// create a session
 			_vscSession = new VolumeShadowCopySession();
-			_vscSession.Ready += new EventHandler(VscSession_Ready);
+			_vscSession.Ready += VscSession_Ready;
 			_vscSession.Aborted += onError;
 
 			// create and mount the shadow copy
@@ -344,8 +338,6 @@ namespace RoboMirror
 		/// Invoked asynchronously when the volume shadow copy has been
 		/// created and mounted.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void VscSession_Ready(object sender, EventArgs e)
 		{
 			// replace the "VOLUME" token by the mount point

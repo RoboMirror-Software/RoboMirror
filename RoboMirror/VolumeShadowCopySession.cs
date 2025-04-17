@@ -25,7 +25,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Creates a new TextEventArgs with the specified text.
 		/// </summary>
-		/// <param name="text"></param>
 		public TextEventArgs(string text)
 		{
 			Text = (text == null ? string.Empty : text);
@@ -90,9 +89,9 @@ namespace RoboMirror
 				_vshadowPath = Path.Combine(System.Windows.Forms.Application.StartupPath, "Tools");
 
 				// select either the 64 bit or 32 bit version
-				bool amd64 = Directory.Exists(Environment.SystemDirectory + @"\..\SysWOW64");
+				bool x64 = Directory.Exists(Environment.SystemDirectory + @"\..\SysWOW64");
 				_vshadowPath = Path.Combine(_vshadowPath,
-					(amd64 ? "vshadow64.exe" : "vshadow32.exe"));
+					(x64 ? "vshadow64.exe" : "vshadow32.exe"));
 
 				if (!File.Exists(_vshadowPath))
 					throw new InvalidOperationException(string.Format("\"{0}\" does not exist.", _vshadowPath));
@@ -100,17 +99,8 @@ namespace RoboMirror
 		}
 
 		/// <summary>
-		/// Makes sure the shadow copy is deleted when the session is
-		/// finalized, if the session has not been disposed of properly.
-		/// </summary>
-		~VolumeShadowCopySession()
-		{
-			Dispose();
-		}
-
-		/// <summary>
 		/// Makes sure the persistent shadow copy is deleted.
-		/// Disposing is thread-safe.
+		/// Disposing is thread-safe and repeatable.
 		/// </summary>
 		public void Dispose()
 		{
@@ -122,28 +112,27 @@ namespace RoboMirror
 					_process = null;
 				}
 
-				if (SnapshotID == null)
-					return;
-
-				// try to delete the shadow copy synchronously
-				// (deleting is fast anyway)
-				using (var process = new ConsoleProcess())
+				if (SnapshotID != null)
 				{
-					process.StartInfo.FileName = _vshadowPath;
-					process.StartInfo.Arguments = string.Format("-ds={0}", SnapshotID);
+					// try to delete the shadow copy synchronously
+					// (deleting is fast anyway)
+					using (var process = new ConsoleProcess())
+					{
+						process.StartInfo.FileName = _vshadowPath;
+						process.StartInfo.Arguments = string.Format("-ds={0}", SnapshotID);
 
-					process.Start();
-					process.WrappedProcess.WaitForExit();
+						process.Start();
+						process.WrappedProcess.WaitForExit();
+					}
+
+					SnapshotID = null;
 				}
 
-				SnapshotID = null;
-
 				if (!string.IsNullOrEmpty(MountPoint))
+				{
 					Directory.Delete(MountPoint);
-
-				MountPoint = null;
-
-				GC.SuppressFinalize(this);
+					MountPoint = null;
+				}
 			}
 		}
 
@@ -152,7 +141,6 @@ namespace RoboMirror
 		/// Starts the session, i.e. creates a persistent shadow copy of the specified
 		/// volume and mounts it in a temporary directory.
 		/// </summary>
-		/// <param name="volume"></param>
 		public void Start(string volume)
 		{
 			if (string.IsNullOrEmpty(volume))
@@ -164,9 +152,9 @@ namespace RoboMirror
 			_process = new ConsoleProcess();
 
 			_process.StartInfo.FileName = _vshadowPath;
-			_process.StartInfo.Arguments = string.Format("-p \"{0}\"", volume);
+			_process.StartInfo.Arguments = string.Format("-p -nw \"{0}\"", volume);
 
-			_process.Exited += new EventHandler(CreationProcess_Exited);
+			_process.Exited += CreationProcess_Exited;
 
 			try
 			{
@@ -182,8 +170,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked asynchronously when the creation process has exited.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void CreationProcess_Exited(object sender, EventArgs e)
 		{
 			if (_process.ExitCode == 0)
@@ -210,7 +196,6 @@ namespace RoboMirror
 		/// Parses the vshadow output after shadow copy creation and
 		/// mounts the snapshot in an appropriate temporary directory.
 		/// </summary>
-		/// <param name="process"></param>
 		private void MountShadowCopy()
 		{
 			var lines = _process.Output;
@@ -247,12 +232,14 @@ namespace RoboMirror
 
 			// start the mount process
 			_process.Dispose();
+			_process = null;
+
 			_process = new ConsoleProcess();
 
 			_process.StartInfo.FileName = _vshadowPath;
 			_process.StartInfo.Arguments = string.Format("-el={0},\"{1}\"", SnapshotID, path);
 
-			_process.Exited += new EventHandler(MountProcess_Exited);
+			_process.Exited += MountProcess_Exited;
 
 			_process.Start();
 		}
@@ -260,8 +247,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked asynchronously when the mount process has exited.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void MountProcess_Exited(object sender, EventArgs e)
 		{
 			if (_process.ExitCode != 0)
@@ -280,7 +265,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Fires the Ready event.
 		/// </summary>
-		/// <param name="e"></param>
 		private void OnReady(EventArgs e)
 		{
 			SmartEventInvoker.FireEvent(Ready, this, e);
@@ -289,7 +273,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Disposes of the session and fires the Aborted event.
 		/// </summary>
-		/// <param name="e"></param>
 		internal void OnAborted(TextEventArgs e)
 		{
 			Dispose();

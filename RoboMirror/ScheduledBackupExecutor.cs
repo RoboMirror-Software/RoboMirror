@@ -27,7 +27,6 @@ namespace RoboMirror
 		public ScheduledBackupExecutor(string guid)
 		{
 			MirrorTask task = null;
-
 			using (var taskManager = new TaskManager(true))
 			{
 				task = taskManager.LoadTask(guid);
@@ -37,9 +36,7 @@ namespace RoboMirror
 				throw new InvalidOperationException("The task does not exist in the XML file.");
 
 			_operation = new MirrorOperation(task, false);
-
-			_operation.Succeeded += new EventHandler(Operation_Succeeded);
-			_operation.Finished += new EventHandler(Operation_Finished);
+			_operation.Finished += Operation_Finished;
 
 			_operation.Start(false);
 		}
@@ -47,10 +44,9 @@ namespace RoboMirror
 		/// <summary>
 		/// Makes sure the operation is disposed of before exiting the application.
 		/// </summary>
-		/// <param name="disposing"></param>
 		protected override void Dispose(bool disposing)
 		{
-			if (_operation != null)
+			if (disposing && _operation != null)
 			{
 				_operation.Dispose();
 				_operation = null;
@@ -59,33 +55,26 @@ namespace RoboMirror
 
 
 		/// <summary>
-		/// Invoked when the backup has been completed successfully.
-		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
-		private void Operation_Succeeded(object sender, EventArgs e)
-		{
-			try
-			{
-				using (var taskManager = new TaskManager(false))
-				{
-					taskManager.SaveTask(_operation.Task);
-				}
-			}
-			catch (InvalidOperationException exception)
-			{
-				Log.Write(EventLogEntryType.Warning,
-					"The last backup timestamp could not be updated:\n\n" + exception.Message);
-			}
-		}
-
-		/// <summary>
 		/// Invoked when the operation has finished.
 		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
-		private void Operation_Finished(object sender, EventArgs e)
+		private void Operation_Finished(object sender, FinishedEventArgs e)
 		{
+			if (e.Success)
+			{
+				try
+				{
+					using (var taskManager = new TaskManager(false))
+					{
+						taskManager.SaveTask(_operation.Task);
+					}
+				}
+				catch (FileLockedException exception)
+				{
+					Log.WriteEntry(_operation.Task, EventLogEntryType.Warning,
+						"The last backup timestamp could not be updated:\n\n" + exception.Message, null);
+				}
+			}
+
 			// exit the application
 			ExitThread();
 		}

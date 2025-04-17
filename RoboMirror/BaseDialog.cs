@@ -14,7 +14,7 @@ namespace RoboMirror
 	/// Base of all dialogs.
 	/// Sets some typical properties for dialogs, contains an "OK" and a "Cancel"
 	/// button and manages the DialogResult in a way that
-	/// a) DialogResult.Yes means that the changes have been applied,
+	/// a) DialogResult.Yes means that there were applied changes,
 	/// b) DialogResult.No means that either there were no changes or the changes
 	///    have been discarded.
 	/// </summary>
@@ -40,7 +40,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked when the dialog has been shown.
 		/// </summary>
-		/// <param name="e"></param>
 		protected override void OnShown(EventArgs e)
 		{
 			// make sure the HasChanged property is set to false because
@@ -54,7 +53,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Invoked when the dialog is about to be closed.
 		/// </summary>
-		/// <param name="e"></param>
 		protected override void OnFormClosing(FormClosingEventArgs e)
 		{
 			// fire the event
@@ -80,11 +78,12 @@ namespace RoboMirror
 				DialogResult = answer;
 			}
 
-			if (HasChanged && DialogResult == DialogResult.Yes)
+			if (DialogResult == DialogResult.Yes)
 			{
 				if (!ApplyChanges())
 				{
 					e.Cancel = true;
+					DialogResult = System.Windows.Forms.DialogResult.None;
 					return;
 				}
 			}

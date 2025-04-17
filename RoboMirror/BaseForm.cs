@@ -18,6 +18,8 @@ namespace RoboMirror
 	{
 		public BaseForm()
 		{
+			Font = System.Drawing.SystemFonts.MessageBoxFont;
+
 			InitializeComponent();
 		}
 	}

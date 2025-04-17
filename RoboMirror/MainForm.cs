@@ -35,20 +35,18 @@ namespace RoboMirror
 		}
 
 
-		/// <summary>
-		/// Creates the main form.
-		/// </summary>
+		/// <exception cref="FileLockedException">The TaskManager could not get exclusive write access to its XML file.</exception>
 		public MainForm()
 		{
 			InitializeComponent();
+
+			backupButton.Font = new System.Drawing.Font(Font, System.Drawing.FontStyle.Bold);
 
 			_taskManager = new TaskManager(false);
 
 			var tasks = _taskManager.LoadTasks();
 			foreach (MirrorTask task in tasks)
-			{
 				AddListViewItem(task);
-			}
 
 			// select the first item
 			if (listView1.Items.Count > 0)
@@ -65,7 +63,7 @@ namespace RoboMirror
 
 		private void listView1_SelectedIndexChanged(object sender, EventArgs e)
 		{
-			editButton.Enabled = removeButton.Enabled = scheduleButton.Enabled =
+			editButton.Enabled = removeButton.Enabled = historyButton.Enabled = scheduleButton.Enabled =
 				(listView1.SelectedIndices.Count > 0);
 
 			backupButton.Enabled = restoreButton.Enabled =
@@ -137,9 +135,24 @@ namespace RoboMirror
 		}
 
 
+		private void historyButton_Click(object sender, EventArgs e)
+		{
+			if (listView1.SelectedIndices.Count == 0)
+				return;
+
+			using (var dialog = new TaskHistoryForm(SelectedTask))
+			{
+				dialog.ShowDialog(this);
+			}
+		}
+
+
 		private void scheduleButton_Click(object sender, EventArgs e)
 		{
-			using (ScheduleTaskDialog dialog = new ScheduleTaskDialog(SelectedTask))
+			if (listView1.SelectedIndices.Count == 0)
+				return;
+
+			using (var dialog = new ScheduleTaskDialog(SelectedTask))
 			{
 				dialog.ShowDialog(this);
 			}
@@ -179,8 +192,7 @@ namespace RoboMirror
 
 			var operation = new MirrorOperation(task, reverse);
 
-			operation.Succeeded += new EventHandler(Operation_Succeeded);
-			operation.Finished += new EventHandler(Operation_Finished);
+			operation.Finished += Operation_Finished;
 
 			_activeOperations.Add(operation);
 
@@ -189,22 +201,15 @@ namespace RoboMirror
 			operation.Start(simulateFirst);
 		}
 
-		private void Operation_Succeeded(object sender, EventArgs e)
+		private void Operation_Finished(object sender, FinishedEventArgs e)
 		{
 			var operation = (MirrorOperation)sender;
 
-			UpdateListViewItem(operation.Task);
-
-			_taskManager.SaveTask(operation.Task);
-
-			// we may consider the operation as being finished
-			// (the user still has a temporary option to view the log)
-			Operation_Finished(sender, e);
-		}
-
-		private void Operation_Finished(object sender, EventArgs e)
-		{
-			var operation = (MirrorOperation)sender;
+			if (e.Success)
+			{
+				UpdateListViewItem(operation.Task);
+				_taskManager.SaveTask(operation.Task);
+			}
 
 			_activeOperations.Remove(operation);
 
@@ -218,7 +223,6 @@ namespace RoboMirror
 		/// <summary>
 		/// Creates an appropriate ListViewItem and adds it to the list view.
 		/// </summary>
-		/// <param name="task"></param>
 		private void AddListViewItem(MirrorTask task)
 		{
 			ListViewItem item = new ListViewItem();
@@ -235,7 +239,6 @@ namespace RoboMirror
 		/// Updates the corresponding item in the list view after a task
 		/// has been modified.
 		/// </summary>
-		/// <param name="task"></param>
 		private void UpdateListViewItem(MirrorTask task)
 		{
 			foreach (ListViewItem item in listView1.Items)
