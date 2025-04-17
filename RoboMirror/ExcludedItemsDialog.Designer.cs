@@ -137,9 +137,7 @@
 			this.label1.Padding = new System.Windows.Forms.Padding(14, 0, 65, 0);
 			this.label1.Size = new System.Drawing.Size(597, 58);
 			this.label1.TabIndex = 0;
-			this.label1.Text = "These files and folders are treated as if they would not exist. They are not copi" +
-    "ed to the target folder, and any matching existing items in the target folder ma" +
-    "y be deleted.";
+			this.label1.Text = "These files and folders will not be copied.";
 			this.label1.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
 			// 
 			// pictureBox3

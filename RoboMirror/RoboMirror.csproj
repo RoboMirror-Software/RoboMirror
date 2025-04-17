@@ -89,6 +89,7 @@
     </Compile>
     <Compile Include="FileDropTargetWrapper.cs" />
     <Compile Include="FileLock.cs" />
+    <Compile Include="PathHelper.cs" />
     <Compile Include="ScheduledTasksManager.cs" />
     <Compile Include="SmartEventInvoker.cs" />
     <Compile Include="MirrorOperation.cs">
