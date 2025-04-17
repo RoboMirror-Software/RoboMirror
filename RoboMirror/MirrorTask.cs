@@ -92,9 +92,9 @@ namespace RoboMirror
 		public string CustomRobocopySwitches { get; set; }
 
 		/// <summary>
-		/// Gets or sets the date and time of the last successful backup operation.
+		/// Gets or sets the date and time of the last successful mirror operation.
 		/// </summary>
-		public DateTime? LastBackup { get; set; }
+		public DateTime? LastOperation { get; set; }
 
 		#endregion
 
@@ -195,10 +195,10 @@ namespace RoboMirror
 				taskNode.AppendChild(node);
 			}
 
-			if (LastBackup.HasValue)
+			if (LastOperation.HasValue)
 			{
-				node = document.CreateElement("lastBackup");
-				node.InnerText = LastBackup.Value.ToUniversalTime().ToString("u",
+				node = document.CreateElement("lastOperation");
+				node.InnerText = LastOperation.Value.ToUniversalTime().ToString("u",
 					System.Globalization.CultureInfo.InvariantCulture);
 				taskNode.AppendChild(node);
 			}
@@ -272,10 +272,12 @@ namespace RoboMirror
 			if (node != null)
 				task.CustomRobocopySwitches = node.InnerText;
 
-			node = taskNode.SelectSingleNode("lastBackup");
+			node = taskNode.SelectSingleNode("lastOperation");
+			if (node == null) // for backwards compatibility
+				node = taskNode.SelectSingleNode("lastBackup");
 			if (node != null)
 			{
-				task.LastBackup = DateTime.ParseExact(node.InnerText, "u",
+				task.LastOperation = DateTime.ParseExact(node.InnerText, "u",
 					System.Globalization.CultureInfo.InvariantCulture).ToLocalTime();
 			}
 

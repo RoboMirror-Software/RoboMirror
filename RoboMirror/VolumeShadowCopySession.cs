@@ -94,7 +94,7 @@ namespace RoboMirror
 					(x64 ? "vshadow64.exe" : "vshadow32.exe"));
 
 				if (!File.Exists(_vshadowPath))
-					throw new InvalidOperationException(string.Format("\"{0}\" does not exist.", _vshadowPath));
+					throw new InvalidOperationException(string.Format("{0} does not exist.", PathHelper.Quote(_vshadowPath)));
 			}
 		}
 
@@ -122,7 +122,7 @@ namespace RoboMirror
 						process.StartInfo.Arguments = string.Format("-ds={0}", SnapshotID);
 
 						process.Start();
-						process.WrappedProcess.WaitForExit();
+						process.WaitForExit();
 					}
 
 					SnapshotID = null;
@@ -152,7 +152,7 @@ namespace RoboMirror
 			_process = new ConsoleProcess();
 
 			_process.StartInfo.FileName = _vshadowPath;
-			_process.StartInfo.Arguments = string.Format("-p -nw {0}", PathHelper.QuotePath(volume));
+			_process.StartInfo.Arguments = string.Format("-p -nw {0}", PathHelper.Quote(volume));
 
 			_process.Exited += CreationProcess_Exited;
 
@@ -223,7 +223,7 @@ namespace RoboMirror
 
 			do
 			{
-				path = Path.Combine(tempPath, Guid.NewGuid().ToString());
+				path = Path.Combine(tempPath, Guid.NewGuid().ToString()); // no trailing directory separator character
 			} while (Directory.Exists(path));
 
 			Directory.CreateDirectory(path);
@@ -237,7 +237,7 @@ namespace RoboMirror
 			_process = new ConsoleProcess();
 
 			_process.StartInfo.FileName = _vshadowPath;
-			_process.StartInfo.Arguments = string.Format("-el={0},{1}", SnapshotID, PathHelper.QuotePath(path));
+			_process.StartInfo.Arguments = string.Format("-el={0},{1}", SnapshotID, PathHelper.Quote(path));
 
 			_process.Exited += MountProcess_Exited;
 

@@ -13,6 +13,35 @@ using System.Text;
 
 namespace RoboMirror
 {
+	public enum RobocopySummaryColumn
+	{
+		Caption = 0,
+		Total = 1,
+		Copied = 2,
+		Skipped = 3,
+		Mismatch = 4,
+		Failed = 5,
+		Extras = 6
+	}
+
+	public enum RobocopySummaryRow
+	{
+		Dirs = 0,
+		Files = 1,
+		Bytes = 2,
+		Times = 3
+	}
+
+	[Flags]
+	public enum RobocopyExitCodes
+	{
+		Copies = 1,          // 1+ items copied
+		ExtraItems = 2,      // 1+ extra items
+		MismatchedItems = 4, // 1+ mismatched items
+		CopyErrors = 8,      // 1+ items could not be copied
+		FatalError = 16      // serious error (invalid command-line or insufficient permissions etc.)
+	}
+
 	/// <summary>
 	/// Wraps a Robocopy command-line process.
 	/// This class augments the ConsoleProcess class by Robocopy-specific
@@ -23,63 +52,27 @@ namespace RoboMirror
 	/// </summary>
 	public sealed class RobocopyProcess : ConsoleProcess
 	{
-		#region Fields.
-
-		// const after construction:
-		string _sourceFolder;
-		string _destinationFolder;
-		string _otherArguments;
-		bool _deleteExtraItems;
+		// const after construction
+		private string _switches;
 
 		private VolumeShadowCopySession _vscSession;
 
-		private bool _outputIsParsed;
-		private int _transfersCount;
-		private int _deletionsCount;
-		private int _errorsCount;
-
-		#endregion
-
-		#region Properties.
+		private int _outputSummaryLineIndex = -1;
 
 		/// <summary>
-		/// Gets the number of transferred files and folders.
+		/// Gets the source folder. This may be the mirror task's target folder!
 		/// </summary>
-		public int TransfersCount
-		{
-			get
-			{
-				ParseOutput();
-				return _transfersCount;
-			}
-		}
+		public string SourceFolder { get; private set; }
 
 		/// <summary>
-		/// Gets the number of deleted files and folders.
+		/// Gets the destination folder. This may be the mirror task's source folder!
 		/// </summary>
-		public int DeletionsCount
-		{
-			get
-			{
-				ParseOutput();
-				return _deletionsCount;
-			}
-		}
+		public string DestinationFolder { get; private set; }
 
 		/// <summary>
-		/// Gets the number of files and folders which could not be
-		/// copied.
+		/// Gets a value indicating whether extra items are to be deleted.
 		/// </summary>
-		public int ErrorsCount
-		{
-			get
-			{
-				ParseOutput();
-				return _errorsCount;
-			}
-		}
-
-		#endregion
+		public bool PurgeExtraItems { get; private set; }
 
 
 		/// <param name="task">Task to be backed up/restored.</param>
@@ -93,9 +86,9 @@ namespace RoboMirror
 				throw new ArgumentNullException("task");
 
 			if (!Directory.Exists(task.Source))
-				throw new InvalidOperationException(string.Format("The source folder \"{0}\" does not exist.", task.Source));
+				throw new InvalidOperationException(string.Format("The source folder {0} does not exist.", PathHelper.Quote(task.Source)));
 			if (!Directory.Exists(task.Target))
-				throw new InvalidOperationException(string.Format("The target folder \"{0}\" does not exist.", task.Target));
+				throw new InvalidOperationException(string.Format("The target folder {0} does not exist.", PathHelper.Quote(task.Target)));
 
 			// only use the bundled Robocopy version if the system does not ship with one
 			string exePath = Path.Combine(Environment.SystemDirectory, "Robocopy.exe");
@@ -104,24 +97,25 @@ namespace RoboMirror
 				exePath = Path.Combine(System.Windows.Forms.Application.StartupPath, @"Tools\Robocopy.exe");
 
 				if (!File.Exists(exePath))
-					throw new InvalidOperationException(string.Format("\"{0}\" does not exist.", exePath));
+					throw new InvalidOperationException(string.Format("{0} does not exist.", PathHelper.Quote(exePath)));
 			}
 
 			StartInfo.FileName = exePath;
 
-			BuildArguments(task, reverse);
+			SourceFolder = (reverse ? task.Target : task.Source);
+			DestinationFolder = (reverse ? task.Source : task.Target);
+			_switches = BuildSwitches(task, SourceFolder);
+			PurgeExtraItems = task.DeleteExtraItems;
+
+			StartInfo.Arguments = string.Format("{0} {1} {2}", PathHelper.QuoteForRobocopy(SourceFolder),
+				PathHelper.QuoteForRobocopy(DestinationFolder), _switches);
 		}
 
 		/// <summary>
-		/// Builds the command-line arguments for Robocopy (StartInfo.Arguments and
-		/// _sourceFolder, _destinationFolder, _otherArguments and _deleteExtraItems).
+		/// Builds the command-line switches for Robocopy.
 		/// </summary>
-		private void BuildArguments(MirrorTask task, bool reverse)
+		private static string BuildSwitches(MirrorTask task, string sourceFolder)
 		{
-			_sourceFolder = (reverse ? task.Target : task.Source);
-			_destinationFolder = (reverse ? task.Source : task.Target);
-			_deleteExtraItems = task.DeleteExtraItems;
-
 			string basicSwitches = string.IsNullOrEmpty(task.CustomRobocopySwitches)
 				? Properties.Settings.Default.RobocopySwitches
 				: task.CustomRobocopySwitches;
@@ -142,45 +136,42 @@ namespace RoboMirror
 					basicSwitches += " /b";
 			}
 
-			var otherArgs = new StringBuilder();
-			otherArgs.Append(basicSwitches);
+			var switches = new StringBuilder();
+			switches.Append(basicSwitches);
 
 			if (!string.IsNullOrEmpty(task.ExtendedAttributes))
 			{
-				otherArgs.Append(" /copy:dat");
-				otherArgs.Append(task.ExtendedAttributes);
+				switches.Append(" /copy:dat");
+				switches.Append(task.ExtendedAttributes);
 			}
 
 			if (task.DeleteExtraItems)
-				otherArgs.Append(" /purge");
+				switches.Append(" /purge");
 
 			if (!task.OverwriteNewerFiles)
-				otherArgs.Append(" /xo"); // exclude older files in the source folder
+				switches.Append(" /xo"); // exclude older files in the source folder
 
 			if (!string.IsNullOrEmpty(task.ExcludedAttributes))
 			{
-				otherArgs.Append(" /xa:");
-				otherArgs.Append(task.ExcludedAttributes);
+				switches.Append(" /xa:");
+				switches.Append(task.ExcludedAttributes);
 			}
 
 			if (task.ExcludedFiles.Count > 0)
 			{
-				otherArgs.Append(" /xf");
+				switches.Append(" /xf");
 				foreach (string file in task.ExcludedFiles)
-					AppendPathOrWildcard(otherArgs, _sourceFolder, file);
+					AppendPathOrWildcard(switches, sourceFolder, file);
 			}
 
 			if (task.ExcludedFolders.Count > 0)
 			{
-				otherArgs.Append(" /xd");
+				switches.Append(" /xd");
 				foreach (string folder in task.ExcludedFolders)
-					AppendPathOrWildcard(otherArgs, _sourceFolder, folder);
+					AppendPathOrWildcard(switches, sourceFolder, folder);
 			}
 
-			_otherArguments = otherArgs.ToString();
-
-			StartInfo.Arguments = string.Format("{0} {1} {2}", PathHelper.QuotePath(_sourceFolder),
-				PathHelper.QuotePath(_destinationFolder), _otherArguments);
+			return switches.ToString();
 		}
 
 		private static void AppendPathOrWildcard(StringBuilder arguments, string folder, string pathOrWildcard)
@@ -193,7 +184,7 @@ namespace RoboMirror
 
 			// enforce enclosing double-quotes because if a volume shadow copy is used,
 			// the source volume will be replaced by the mount point which may contain spaces
-			arguments.Append(PathHelper.QuotePath(pathOrWildcard, force: true));
+			arguments.Append(PathHelper.QuoteForRobocopy(pathOrWildcard, force: true));
 		}
 
 
@@ -211,63 +202,73 @@ namespace RoboMirror
 				_vscSession.Dispose();
 		}
 
+		/// <summary>
+		/// Indicates whether any of the specified flags is set in Robocopy's exit code.
+		/// Throws if the process has not exited yet.
+		/// </summary>
+		public bool IsAnyExitFlagSet(RobocopyExitCodes flags)
+		{
+			return (ExitCode & (int)flags) != 0;
+		}
 
 		/// <summary>
-		/// Parses the output if it has not been parsed yet.
+		/// Tries to parse a field of the Robocopy summary output.
+		/// Returns "NaN" on error.
 		/// </summary>
-		private void ParseOutput()
+		public string GetSummary(RobocopySummaryRow row, RobocopySummaryColumn column)
 		{
-			if (_outputIsParsed)
-				return;
+			string defaultValue = "NaN";
+
+			int baseRowIndex = GetOutputSummaryLineIndex();
+			if (baseRowIndex < 0)
+				return defaultValue;
+
+			int rowIndex = baseRowIndex + (int)row;
+			int colIndex = (int)column;
+
+			try
+			{
+				string rawValue = Output[rowIndex].Substring(colIndex * 10, 10).Trim();
+
+				// try to parse it as integer; on success enforce culture-specific group separators
+				int integer;
+				if (int.TryParse(rawValue, out integer) && integer.ToString() == rawValue)
+					return integer.ToString("n0");
+
+				return rawValue;
+			}
+			catch
+			{
+				return defaultValue;
+			}
+		}
+
+		private int GetOutputSummaryLineIndex()
+		{
+			if (_outputSummaryLineIndex >= 0)
+				return _outputSummaryLineIndex;
 
 			// make sure parsing is thread-safe
 			lock (_syncObject)
 			{
-				if (_outputIsParsed)
-					return;
+				if (_outputSummaryLineIndex >= 0)
+					return _outputSummaryLineIndex;
 
 				var lines = Output;
 
-				// search for the dashed line marking the beginning of Robocopy's summary
-				int summaryLineIndex = -1;
-				for (int i = lines.Count - 1; i >= 0; i--)
+				// search for the last dashed line marking the beginning of Robocopy's summary
+				for (int i = lines.Count - 1 - 7; i >= 0; --i)
 				{
 					if (lines[i].StartsWith("----------", StringComparison.Ordinal))
 					{
 						// jump to the directories line
-						summaryLineIndex = i + 3;
+						_outputSummaryLineIndex = i + 3;
 						break;
 					}
 				}
-
-				try
-				{
-					string foldersSummaryLine = lines[summaryLineIndex];
-					string filesSummaryLine = lines[summaryLineIndex + 1];
-
-					// split the lines
-					int foldersSeparatorIndex = foldersSummaryLine.IndexOf(':');
-					int filesSeparatorIndex = filesSummaryLine.IndexOf(':');
-
-					var foldersStats = foldersSummaryLine.Substring(foldersSeparatorIndex + 1).Split(new char[] { ' ' },
-						StringSplitOptions.RemoveEmptyEntries);
-					var filesStats = filesSummaryLine.Substring(filesSeparatorIndex + 1).Split(new char[] { ' ' },
-						StringSplitOptions.RemoveEmptyEntries);
-
-					_transfersCount = int.Parse(filesStats[1]) +
-						int.Parse(foldersStats[1]);
-					_deletionsCount = (!_deleteExtraItems ? 0 :
-						int.Parse(filesStats[5]) + int.Parse(foldersStats[5]));
-					_errorsCount = int.Parse(filesStats[4]) +
-						int.Parse(foldersStats[4]);
-
-					_outputIsParsed = true;
-				}
-				catch (Exception e)
-				{
-					throw new NotSupportedException("The Robocopy output could not be parsed.", e);
-				}
 			}
+
+			return _outputSummaryLineIndex;
 		}
 
 
@@ -328,9 +329,9 @@ namespace RoboMirror
 			// replace all occurrences of the source volume in the command-line
 			// arguments (excluding the destination folder) by the mount point
 			StartInfo.Arguments = string.Format("{0} {1} {2}",
-				PathHelper.QuotePath(_sourceFolder.Replace(sourceVolume, _vscSession.MountPoint)),
-				PathHelper.QuotePath(_destinationFolder),
-				_otherArguments.Replace(sourceVolume, _vscSession.MountPoint));
+				PathHelper.QuoteForRobocopy(SourceFolder.Replace(sourceVolume, _vscSession.MountPoint)),
+				PathHelper.QuoteForRobocopy(DestinationFolder),
+				_switches.Replace(sourceVolume + Path.DirectorySeparatorChar, _vscSession.MountPoint + Path.DirectorySeparatorChar));
 
 			// start Robocopy, making sure the shadow copy is deleted
 			// immediately if Robocopy cannot be started
@@ -351,7 +352,7 @@ namespace RoboMirror
 
 		private string GetSourceVolume()
 		{
-			string r = Path.GetPathRoot(_sourceFolder);
+			string r = Path.GetPathRoot(SourceFolder);
 			// remove a trailing directory separator character
 			if (r[r.Length - 1] == Path.DirectorySeparatorChar)
 				r = r.Substring(0, r.Length - 1);

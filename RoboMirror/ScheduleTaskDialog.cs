@@ -109,7 +109,7 @@ namespace RoboMirror
 			}
 			catch (Exception e)
 			{
-				MessageBox.Show(this, "The changes could not be saved.\n\nDetails:\n" + e.Message, "Scheduled backup task",
+				MessageBox.Show(this, "The changes could not be saved.\n\n" + e.Message, "Scheduled backup task",
 					MessageBoxButtons.OK, MessageBoxIcon.Error);
 				return false;
 			}

@@ -36,6 +36,7 @@ namespace RoboMirror
 			catch { return path; }
 		}
 
+
 		/// <summary>
 		/// Returns true if the specified path is contained by the specified folder or the folder itself.
 		/// </summary>
@@ -65,10 +66,11 @@ namespace RoboMirror
 			return true;
 		}
 
+
 		/// <summary>
 		/// Encloses a path in double-quotes if it contains spaces.
 		/// </summary>
-		public static string QuotePath(string path, bool force = false)
+		public static string Quote(string path, bool force = false)
 		{
 			if (string.IsNullOrEmpty(path))
 				return path;
@@ -76,9 +78,25 @@ namespace RoboMirror
 			if (!force && path.IndexOf(' ') < 0)
 				return path;
 
-			return '"' + path +
-				// \" is interpreted as escaped double-quote, so if the path ends with \, we need to escape the backslash => \\"
-				(path[path.Length - 1] == '\\' ? "\\\"" : "\"");
+			return string.Concat('"', path, '"');
+		}
+
+		/// <summary>
+		/// Encloses a path in double-quotes if it contains spaces and
+		/// makes sure it can be used as Robocopy command-line argument.
+		/// </summary>
+		public static string QuoteForRobocopy(string path, bool force = false)
+		{
+			if (string.IsNullOrEmpty(path))
+				return path;
+
+			path = Quote(path, force);
+
+			// \" is interpreted as escaped double-quote, so if the path ends with \, we need to escape the backslash => \\"
+			if (path.EndsWith("\\\"", StringComparison.Ordinal))
+				path = path.Substring(0, path.Length - 2) + "\\\\\"";
+
+			return path;
 		}
 	}
 }

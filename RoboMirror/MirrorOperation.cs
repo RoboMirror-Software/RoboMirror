@@ -52,7 +52,8 @@ namespace RoboMirror
 		// automatically
 		private const int BALLOON_TIMEOUT = 10000;
 
-		#region Fields.
+		// are we performing a backup or a restore operation?
+		private bool _reverse;
 
 		// current/last Robocopy process
 		private RobocopyProcess _process;
@@ -61,21 +62,16 @@ namespace RoboMirror
 		// lines, used when a simulation is performed first:
 		private int _expectedOutputLinesCount, _currentOutputLinesCount;
 
-		// are we performing a backup or a restore operation?
-		private bool _reverse;
-		// real source and destination folders
-		private string _source, _destination;
-
 		// tray icon
 		private NotifyIcon _icon;
-
-		#endregion
 
 
 		/// <summary>
 		/// Gets the task associated with the operation.
 		/// </summary>
 		public MirrorTask Task { get; private set; }
+
+		private string DestinationFolder { get { return _reverse ? Task.Source : Task.Target; } }
 
 
 		/// <summary>
@@ -101,11 +97,7 @@ namespace RoboMirror
 				throw new ArgumentNullException("task");
 
 			Task = task;
-
 			_reverse = reverse;
-
-			_source = (_reverse ? task.Target : task.Source);
-			_destination = (_reverse ? task.Source : task.Target);
 
 			_icon = new NotifyIcon();
 			_icon.Icon = Properties.Resources.data_copy_Icon;
@@ -113,7 +105,7 @@ namespace RoboMirror
 
 			_icon.ContextMenuStrip = new ContextMenuStrip();
 
-			_icon.ContextMenuStrip.Items.Add("Destination: " + _destination);
+			_icon.ContextMenuStrip.Items.Add("Destination: " + DestinationFolder);
 			_icon.ContextMenuStrip.Items[0].Enabled = false;
 
 			_icon.ContextMenuStrip.Items.Add("Abort", Properties.Resources.delete,
@@ -177,7 +169,7 @@ namespace RoboMirror
 
 				if (simulateFirst)
 				{
-					_process.WrappedProcess.StartInfo.Arguments += " /l";
+					_process.StartInfo.Arguments += " /l";
 
 					_process.Started += SimulationProcess_Started;
 					_process.Exited += SimulationProcess_Exited;
@@ -207,9 +199,7 @@ namespace RoboMirror
 
 			// keep track of the progress if a simulation has been performed first
 			if (_expectedOutputLinesCount > 0)
-			{
 				_process.LineWritten += RealProcess_LineWritten;
-			}
 
 			if (Task.UseVolumeShadowCopy)
 			{
@@ -243,18 +233,21 @@ namespace RoboMirror
 		{
 			EnableAborting(false);
 
-			int exitCode = CheckExitCode();
+			bool aborted = (_process.ExitCode == -1);
 
-			// finish if the user has aborted or if Robocopy could not be
-			// started normally
-			if (exitCode == -1 || (exitCode & 16) != 0)
+			// alert if Robocopy could not be started normally
+			bool fatalError = (!aborted && _process.IsAnyExitFlagSet(RobocopyExitCodes.FatalError));
+			if (fatalError)
+				Alert("A fatal Robocopy error has occurred.", MessageBoxIcon.Error);
+
+			if (aborted || fatalError)
 			{
 				OnFinished(new FinishedEventArgs(false));
 				return;
 			}
 
 			// prompt the user to commit the pending changes
-			using (var dialog = new SimulationResultDialog(_process, _destination))
+			using (var dialog = new SimulationResultDialog(_process))
 			{
 				if (dialog.ShowDialog() != DialogResult.OK)
 				{
@@ -288,7 +281,7 @@ namespace RoboMirror
 		private void RealProcess_Started(object sender, EventArgs e)
 		{
 			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Mirroring...",
-				string.Format("to \"{0}\"", _destination), ToolTipIcon.Info);
+				string.Format("to {0}", PathHelper.Quote(DestinationFolder)), ToolTipIcon.Info);
 
 			EnableAborting(true);
 		}
@@ -303,13 +296,9 @@ namespace RoboMirror
 
 			double expectedPercentage = (100.0 * _currentOutputLinesCount) / _expectedOutputLinesCount;
 
-			if (expectedPercentage < 100)
-			{
-				_icon.Text = string.Format("RoboMirroring... ({0}%)",
-					expectedPercentage.ToString("F1"));
-			}
-			else
-				_icon.Text = "RoboMirroring...";
+			_icon.Text = (expectedPercentage < 100
+				? string.Format("RoboMirroring... ({0}%)", expectedPercentage.ToString("F1"))
+				: "RoboMirroring...");
 		}
 
 		/// <summary>
@@ -321,11 +310,17 @@ namespace RoboMirror
 
 			_icon.Text = "RoboMirrored";
 
-			Log.LogRun(_process, Task, _reverse);
+			try
+			{
+				Log.LogRun(_process, Task);
+			}
+			catch (Exception exception)
+			{
+				MessageBox.Show("The mirror operation could not be logged.\n\n" + exception.Message,
+					"RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
 
-			int exitCode = CheckExitCode();
-
-			bool success = (exitCode != -1 && (exitCode & 16) == 0 && (exitCode & 8) == 0);
+			bool success = CheckExitCode();
 
 			OnFinished(new FinishedEventArgs(success));
 		}
@@ -373,7 +368,7 @@ namespace RoboMirror
 
 			// ask the user for confirmation and check if the process has
 			// exited in the meantime
-			if (MessageBox.Show(string.Format("Are you sure you want to abort mirroring to \"{0}\"?", _destination),
+			if (MessageBox.Show(string.Format("Are you sure you want to abort mirroring to {0}?", PathHelper.Quote(DestinationFolder)),
 				"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) !=
 				DialogResult.Yes || _process.HasExited)
 			{
@@ -387,41 +382,45 @@ namespace RoboMirror
 
 
 		/// <summary>
-		/// Checks the exit code of a Robocopy process and displays a message box if
-		/// it could not be started normally.
+		/// Checks the exit code of the Robocopy process and informs the user
+		/// if the operation was not successful.
 		/// </summary>
-		/// <returns>The exit code.</returns>
-		private int CheckExitCode()
+		/// <returns>True if the operation was successful.</returns>
+		private bool CheckExitCode()
 		{
-			int exitCode = _process.ExitCode;
+			if (_process.ExitCode == -1) // aborted?
+				return false;
 
-			if (exitCode != -1)
+			if (_process.IsAnyExitFlagSet(RobocopyExitCodes.FatalError))
 			{
-				if ((exitCode & 16) != 0)
-				{
-					if (MessageBox.Show("A fatal Robocopy error has occurred.\nWould you like to view the log?",
-						"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes)
-					{
-						using (var form = new LogForm("Robocopy log", _process.FullOutput))
-						{
-							form.ShowDialog();
-						}
-					}
-				}
-				else if ((exitCode & 8) != 0)
-				{
-					if (MessageBox.Show("Some files could not be copied.\nWould you like to view the log?",
-						"RoboMirror", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
-					{
-						using (var form = new LogForm("Robocopy log", _process.FullOutput))
-						{
-							form.ShowDialog();
-						}
-					}
-				}
+				Alert("A fatal Robocopy error has occurred.", MessageBoxIcon.Error);
+				return false;
 			}
 
-			return exitCode;
+			if (_process.IsAnyExitFlagSet(RobocopyExitCodes.CopyErrors))
+			{
+				Alert("Some items could not be mirrored.", MessageBoxIcon.Error);
+				return false;
+			}
+
+			if (_process.IsAnyExitFlagSet(RobocopyExitCodes.MismatchedItems))
+			{
+				Alert("There were some file <-> folder mismatches.", MessageBoxIcon.Warning);
+				return false;
+			}
+
+			return true;
+		}
+
+		private void Alert(string text, MessageBoxIcon icon)
+		{
+			if (MessageBox.Show(text + "\nWould you like to view the log?", "RoboMirror", MessageBoxButtons.YesNo, icon) == DialogResult.Yes)
+			{
+				using (var form = new LogForm("Robocopy log", _process.FullOutput))
+				{
+					form.ShowDialog();
+				}
+			}
 		}
 
 
@@ -430,8 +429,8 @@ namespace RoboMirror
 		/// </summary>
 		private void OnFinished(FinishedEventArgs e)
 		{
-			if (e.Success && !_reverse)
-				Task.LastBackup = DateTime.Now;
+			if (e.Success)
+				Task.LastOperation = DateTime.Now;
 
 			Dispose();
 

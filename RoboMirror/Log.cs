@@ -122,11 +122,7 @@ namespace RoboMirror
 		/// </summary>
 		/// <param name="process">Terminated Robocopy process.</param>
 		/// <param name="task">Task associated with the operation.</param>
-		/// <param name="reverse">
-		/// Indicates whether source and target have been swapped, i.e.
-		/// whether this has been a restore or backup operation.
-		/// </param>
-		public static void LogRun(RobocopyProcess process, MirrorTask task, bool reverse)
+		public static void LogRun(RobocopyProcess process, MirrorTask task)
 		{
 			if (process == null)
 				throw new ArgumentNullException("process");
@@ -136,37 +132,40 @@ namespace RoboMirror
 			EventLogEntryType type;
 			string messageFormat;
 
-			int exitCode = process.ExitCode;
-
-			if (exitCode == -1)
-			{
-				type = EventLogEntryType.Warning;
-				messageFormat = "Mirroring of \"{0}\" to \"{1}\" aborted.";
-			}
-			else if ((exitCode & 16) != 0)
+			if (process.ExitCode == -1)
 			{
 				type = EventLogEntryType.Error;
-				messageFormat = "A fatal error occurred while trying to mirror \"{0}\" to \"{1}\".";
+				messageFormat = "Operation aborted while mirroring {0} to {1}.";
 			}
-			else if ((exitCode & 8) != 0)
-			{
-				type = EventLogEntryType.Error;
-				messageFormat = "Some items could not be mirrored from \"{0}\" to \"{1}\".";
-			}
-			else if (exitCode == 0)
+			else if (process.ExitCode == 0)
 			{
 				type = EventLogEntryType.Information;
-				messageFormat = "\"{0}\" and \"{1}\" are already in sync.";
+				messageFormat = "Already in sync: {0} and {1}";
+			}
+			else if (process.IsAnyExitFlagSet(RobocopyExitCodes.FatalError))
+			{
+				type = EventLogEntryType.Error;
+				messageFormat = "A fatal error occurred while trying to mirror {0} to {1}.";
+			}
+			else if (process.IsAnyExitFlagSet(RobocopyExitCodes.CopyErrors))
+			{
+				type = EventLogEntryType.Error;
+				messageFormat = "Some items could not be mirrored from {0} to {1}.";
+			}
+			else if (process.IsAnyExitFlagSet(RobocopyExitCodes.MismatchedItems))
+			{
+				type = EventLogEntryType.Warning;
+				messageFormat = "Some file <-> folder mismatches while mirroring {0} to {1}.";
 			}
 			else
 			{
 				type = EventLogEntryType.Information;
-				messageFormat = "\"{0}\" successfully mirrored to \"{1}\".";
+				messageFormat = "Success: {0} mirrored to {1}";
 			}
 
 			string message = string.Format(messageFormat,
-				(reverse ? task.Target : task.Source),
-				(reverse ? task.Source : task.Target));
+				PathHelper.Quote(process.SourceFolder),
+				PathHelper.Quote(process.DestinationFolder));
 
 			WriteEntry(task, type, message, process.FullOutput);
 		}

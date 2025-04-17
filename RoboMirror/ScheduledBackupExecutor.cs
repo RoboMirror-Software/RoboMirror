@@ -65,13 +65,24 @@ namespace RoboMirror
 				{
 					using (var taskManager = new TaskManager(false))
 					{
-						taskManager.SaveTask(_operation.Task);
+						// reload the task
+						var newTask = taskManager.LoadTask(_operation.Task.Guid);
+						newTask.LastOperation = _operation.Task.LastOperation;
+						taskManager.SaveTask(newTask);
 					}
 				}
-				catch (FileLockedException exception)
+				catch (Exception exception)
 				{
-					Log.WriteEntry(_operation.Task, EventLogEntryType.Warning,
-						"The last backup timestamp could not be updated:\n\n" + exception.Message, null);
+					try
+					{
+						Log.WriteEntry(_operation.Task, EventLogEntryType.Warning,
+							"The last successful operation time stamp could not be updated: " + exception.Message, null);
+					}
+					catch
+					{
+						MessageBox.Show("The last successful operation time stamp could not be updated:\n\n" + exception.Message,
+							"RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+					}
 				}
 			}
 
