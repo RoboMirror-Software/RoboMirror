@@ -1,5 +1,5 @@
 #define MyAppName "RoboMirror"
-#define MyAppVersion "1.3"
+#define MyAppVersion "2.0"
 #define MyAppExeName "RoboMirror.exe"
 
 [Setup]
@@ -144,8 +144,8 @@ end;
 
 function InitializeSetup(): Boolean;
 begin
-  if not IsDotNetDetected('v2.0.50727') then begin
-    MsgBox('{#MyAppName} requires Microsoft .NET Framework 2.0.'#13
+  if not IsDotNetDetected('v4\Client') then begin
+    MsgBox('{#MyAppName} requires Microsoft .NET Framework 4.0 (Client Profile).'#13
            'Please install it first and then start this installer again.',
            mbInformation, MB_OK);
     Result := False;

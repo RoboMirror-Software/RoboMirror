@@ -13,7 +13,6 @@ using System.Windows.Forms;
 namespace RoboMirror
 {
 	#region FinishedEventArgs class
-
 	/// <summary>
 	/// EventArgs derivate for the MirrorOperation's Finished event.
 	/// </summary>
@@ -31,7 +30,16 @@ namespace RoboMirror
 			Success = success;
 		}
 	}
+	#endregion
 
+	#region IMirrorOperationStatus interface
+	public interface IMirrorOperationStatus
+	{
+		bool IsAbortingSupported { set; }
+		double Percentage { set; }
+
+		void OnEnterNewStage(string stage, string text);
+	}
 	#endregion
 
 	/// <summary>
@@ -41,10 +49,6 @@ namespace RoboMirror
 	/// </summary>
 	public sealed class MirrorOperation : IDisposable, ISynchronizeInvoke
 	{
-		// number of milliseconds after which a balloon tip will fade out
-		// automatically
-		private const int BALLOON_TIMEOUT = 20000;
-
 		// all ISynchronizeInvoke calls will be forwarded to a control acting as
 		// synchronization object
 		// ISynchronizeInvoke offers a neat synchronization mechanism in
@@ -56,14 +60,13 @@ namespace RoboMirror
 		// are we performing a backup or a restore operation?
 		private readonly bool _reverse;
 
+		private IMirrorOperationStatus _status;
+
 		private VolumeShadowCopySession _vscSession;
 
 		// current/last Robocopy process
 		private RobocopyProcess _process;
 		int _simulationProcessOutputLinesCount = -1;
-
-		// tray icon
-		private NotifyIcon _icon;
 
 
 		public MirrorTask Task { get; private set; }
@@ -98,6 +101,14 @@ namespace RoboMirror
 			_control = control;
 			Task = task;
 			_reverse = reverse;
+
+			UpdateFolders();
+		}
+
+		private void UpdateFolders()
+		{
+			SourceFolder = (!_reverse ? Task.Source : Task.Target);
+			DestinationFolder = (!_reverse ? Task.Target : Task.Source);
 		}
 
 
@@ -107,18 +118,21 @@ namespace RoboMirror
 		/// prompt the user for confirmation and enable some rough progress
 		/// estimation for the actual operation.
 		/// </param>
-		public void Start(bool simulateFirst)
+		public void Start(IMirrorOperationStatus status, bool simulateFirst)
 		{
+			if (status == null)
+				throw new ArgumentNullException("status");
+
 			if (IsFinished)
 				throw new InvalidOperationException("The operation has already finished.");
 			if (HasStarted)
 				throw new InvalidOperationException("The operation has already been started.");
 
-			SourceFolder = (!_reverse ? Task.Source : Task.Target);
-			DestinationFolder = (!_reverse ? Task.Target : Task.Source);
-			HasStarted = true;
+			_status = status;
+			_status.IsAbortingSupported = false;
 
-			CreateTrayIcon();
+			UpdateFolders();
+			HasStarted = true;
 
 			if (simulateFirst)
 				StartSimulationProcess();
@@ -126,31 +140,9 @@ namespace RoboMirror
 				LaunchActualOperation();
 		}
 
-		private void CreateTrayIcon()
-		{
-			_icon = new NotifyIcon();
-			_icon.Icon = Properties.Resources.data_copy_Icon;
-			_icon.Text = string.Format("RoboMirroring...");
-
-			_icon.ContextMenuStrip = new ContextMenuStrip();
-
-			_icon.ContextMenuStrip.Items.Add("To: " + DestinationFolder);
-			_icon.ContextMenuStrip.Items[0].Enabled = false;
-
-			_icon.ContextMenuStrip.Items.Add("Abort", Properties.Resources.delete,
-				(s, e) => { Abort(); });
-
-			EnableAborting(false);
-
-			_icon.Visible = true;
-		}
-
 
 		public void Dispose()
 		{
-			if (_icon != null)
-				_icon.Visible = false;
-
 			if (_process != null)
 			{
 				_process.Dispose(); // incl. killing it if currently running + waiting for it to exit and the Exited event handler to complete
@@ -161,13 +153,6 @@ namespace RoboMirror
 			{
 				_vscSession.Dispose();
 				_vscSession = null;
-			}
-
-			if (_icon != null)
-			{
-				_icon.ContextMenuStrip.Dispose();
-				_icon.Dispose();
-				_icon = null;
 			}
 		}
 
@@ -180,9 +165,6 @@ namespace RoboMirror
 				return;
 
 			IsFinished = true;
-
-			if (success)
-				Task.LastOperation = DateTime.Now;
 
 			Dispose();
 
@@ -202,15 +184,13 @@ namespace RoboMirror
 			if (!TryStartRobocopy(_process))
 				return;
 
-			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Analyzing...",
-				"Pending changes are being identified...", ToolTipIcon.Info);
-
-			EnableAborting(true);
+			_status.OnEnterNewStage("Analyzing...", "Pending changes are being identified...");
+			_status.IsAbortingSupported = true;
 		}
 
 		private void SimulationProcess_Exited(object sender, EventArgs e)
 		{
-			EnableAborting(false);
+			_status.IsAbortingSupported = false;
 
 			bool aborted = (_process.ExitCode == -1 || IsFinished);
 
@@ -262,14 +242,12 @@ namespace RoboMirror
 			_vscSession.Error += VscSession_Error;
 			_vscSession.Ready += VscSession_Ready;
 
-			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Preparing...",
-				string.Format("Creating shadow copy of volume {0} ...", PathHelper.Quote(sourceVolume)),
-				ToolTipIcon.Info);
+			_status.OnEnterNewStage("Preparing...", string.Format("Creating shadow copy of volume {0} ...", PathHelper.Quote(sourceVolume)));
 
 			// create and mount the shadow copy
 			_vscSession.Start(SourceFolder);
 
-			EnableAborting(true);
+			_status.IsAbortingSupported = true;
 		}
 
 		/// <summary>
@@ -277,7 +255,7 @@ namespace RoboMirror
 		/// </summary>
 		private void VscSession_Error(object sender, TextEventArgs e)
 		{
-			EnableAborting(false);
+			_status.IsAbortingSupported = false;
 
 			MessageBox.Show(e.Text, "RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
@@ -289,7 +267,7 @@ namespace RoboMirror
 		/// </summary>
 		private void VscSession_Ready(object sender, EventArgs e)
 		{
-			EnableAborting(false);
+			_status.IsAbortingSupported = false;
 
 			if (!IsFinished)
 				StartProcess(_vscSession.MountPoint);
@@ -310,35 +288,28 @@ namespace RoboMirror
 			if (!TryStartRobocopy(_process))
 				return;
 
-			_icon.ShowBalloonTip(BALLOON_TIMEOUT, "Mirroring...",
-				string.Format("to {0}", PathHelper.Quote(DestinationFolder)), ToolTipIcon.Info);
-
-			EnableAborting(true);
+			_status.OnEnterNewStage("Mirroring...", string.Format("to {0}", PathHelper.Quote(DestinationFolder)));
+			_status.IsAbortingSupported = true;
 		}
 
 		private void Process_ProgressChanged(object sender, ProgressEventArgs e)
 		{
-			if (_icon == null)
-				return;
-
-			string percentageSuffix = (e.Percentage >= 100 ? string.Empty
-				: string.Format(" ({0}%)", e.Percentage.ToString("f1")));
-
-			_icon.ContextMenuStrip.Items[0].Text = string.Format("To: {0}{1}",
-				DestinationFolder, percentageSuffix);
-
-			_icon.Text = string.Format("RoboMirroring...{0}", percentageSuffix);
+			_status.Percentage = e.Percentage;
 		}
 
 		private void Process_Exited(object sender, EventArgs e)
 		{
-			EnableAborting(false);
+			_status.IsAbortingSupported = false;
 
-			_icon.Text = "RoboMirrored";
+			bool success = CheckExitCode();
 
 			try
 			{
-				Log.LogRun(Task.Guid, _process, SourceFolder, DestinationFolder);
+				var entry = Log.LogRun(Task.Guid, _process, SourceFolder, DestinationFolder,
+					updateLastSuccessTimeStamp: success);
+
+				if (success)
+					Task.LastOperation = entry.TimeStamp;
 			}
 			catch (Exception exception)
 			{
@@ -346,22 +317,11 @@ namespace RoboMirror
 					"RoboMirror", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 
-			bool success = CheckExitCode();
-
 			Finish(success);
 		}
 
 		#endregion
 
-
-		#region Aborting
-
-		/// <summary>Enables or disables the abort context menu item.</summary>
-		private void EnableAborting(bool enable)
-		{
-			if (_icon != null)
-				_icon.ContextMenuStrip.Items[1].Enabled = enable;
-		}
 
 		/// <summary>Aborts the operation if it is currently running.</summary>
 		public void Abort()
@@ -369,8 +329,6 @@ namespace RoboMirror
 			if (HasStarted && !IsFinished)
 				Finish(false);
 		}
-
-		#endregion
 
 
 		/// <summary>

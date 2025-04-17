@@ -54,7 +54,7 @@ namespace RoboMirror.GUI
 			if (listView1.SelectedIndices.Count != 1)
 				return;
 
-			var entry = (LogEntry)listView1.SelectedItems[0].Tag;
+			var entry = (Log.LogEntry)listView1.SelectedItems[0].Tag;
 			if (string.IsNullOrEmpty(entry.Data))
 				return;
 

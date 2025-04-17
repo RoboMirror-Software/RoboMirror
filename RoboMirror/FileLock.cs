@@ -38,12 +38,14 @@ namespace RoboMirror
 	/// </summary>
 	public class FileLock : IDisposable
 	{
-		private FileStream _file;
-		private long _length;
+		public const int RETRY_ATTEMPTS = 100;
+		public const int RETRY_DELAY = 100; // ms
 
-		/// <param name="retryAttempts">Maximum number of retry attempts, each delayed by 100 ms.</param>
+		private FileStream _file;
+
+		/// <param name="retryAttempts">Maximum number of retry attempts, each delayed by RETRY_DELAY ms.</param>
 		/// <exception cref="FileLockedException"></exception>
-		public FileLock(FileStream file, int retryAttempts = 100)
+		public FileLock(FileStream file, int retryAttempts = RETRY_ATTEMPTS)
 		{
 			if (file == null)
 				throw new ArgumentNullException("file");
@@ -54,8 +56,7 @@ namespace RoboMirror
 			{
 				try
 				{
-					_length = _file.Length;
-					_file.Lock(0, _length);
+					_file.Lock(0, long.MaxValue);
 					break;
 				}
 				catch (IOException e)
@@ -63,14 +64,14 @@ namespace RoboMirror
 					if (i >= retryAttempts)
 						throw new FileLockedException(e);
 
-					System.Threading.Thread.Sleep(100);
+					System.Threading.Thread.Sleep(RETRY_DELAY);
 				}
 			}
 		}
 
 		public void Dispose()
 		{
-			_file.Unlock(0, _length);
+			_file.Unlock(0, long.MaxValue);
 		}
 	}
 }

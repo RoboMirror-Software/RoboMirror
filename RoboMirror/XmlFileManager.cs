@@ -8,7 +8,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Xml;
+using System.Xml.Linq;
 
 namespace RoboMirror
 {
@@ -26,7 +26,8 @@ namespace RoboMirror
 	{
 		private FileStream _file;
 
-		protected XmlDocument Document { get; private set; }
+		protected string FilePath { get; private set; }
+		protected XElement RootElement { get; private set; }
 
 		/// <exception cref="FileLockedException"></exception>
 		protected XmlFileManager(string path, string rootTag, bool readOnly)
@@ -36,32 +37,35 @@ namespace RoboMirror
 			if (string.IsNullOrEmpty(rootTag))
 				throw new ArgumentNullException("rootTag");
 
-			string folder = Path.GetDirectoryName(path);
+			FilePath = path;
 
+			// make sure the folder exists
+			string folder = Path.GetDirectoryName(FilePath);
 			if (!Directory.Exists(folder))
 				Directory.CreateDirectory(folder);
 
+			// open/create the file
 			try
 			{
-				_file = File.Open(path, FileMode.OpenOrCreate,
+				_file = File.Open(FilePath, FileMode.OpenOrCreate,
 					readOnly ? FileAccess.Read : FileAccess.ReadWrite,
 					readOnly ? FileShare.ReadWrite : FileShare.Read);
 			}
 			catch (IOException e)
 			{
-				throw new FileLockedException(path, e);
+				throw new FileLockedException(FilePath, e);
 			}
 
-			Document = new XmlDocument();
-
+			// parse it
+			var document = new XDocument();
 			try
 			{
 				using (var fileLock = new FileLock(_file))
 				{
 					if (_file.Length > 0)
-						Document.Load(_file);
+						document = XDocument.Load(_file);
 					else // initialize the XML document with the root element
-						Document.AppendChild(Document.CreateElement(rootTag));
+						document = new XDocument(new XElement(rootTag));
 				}
 			}
 			catch (FileLockedException)
@@ -72,28 +76,26 @@ namespace RoboMirror
 			catch (Exception e)
 			{
 				Dispose();
-				throw new InvalidDataException(string.Format("{0} is corrupt.", PathHelper.Quote(path)), e);
+				throw new InvalidDataException(string.Format("{0} is corrupt.", PathHelper.Quote(FilePath)), e);
 			}
+
+			RootElement = document.Root;
 
 			if (readOnly)
 				Dispose();
 		}
 
-		/// <summary>
-		/// Releases the file.
-		/// </summary>
+		/// <summary>Releases the file.</summary>
 		public void Dispose()
 		{
 			if (_file != null)
 			{
-				_file.Close();
+				_file.Dispose();
 				_file = null;
 			}
 		}
 
-		/// <summary>
-		/// Saves the XML document to the file.
-		/// </summary>
+		/// <summary>Saves the XML document to the file.</summary>
 		protected void Save()
 		{
 			if (_file == null)
@@ -105,7 +107,7 @@ namespace RoboMirror
 				_file.Position = 0;
 				_file.SetLength(0);
 
-				Document.Save(_file);
+				RootElement.Document.Save(_file);
 
 				_file.Flush();
 			}

@@ -9,116 +9,92 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Xml;
+using System.Linq;
+using System.Xml.Linq;
 
 namespace RoboMirror
 {
-	#region LogEntry class
-
 	/// <summary>
-	/// Represents a RoboMirror-specific event log entry.
-	/// </summary>
-	public class LogEntry : IComparable<LogEntry>
-	{
-		/// <summary>
-		/// Gets the date and time when the entry has been generated.
-		/// </summary>
-		public DateTime TimeStamp { get; set; }
-
-		/// <summary>
-		/// Gets or sets the type of the entry.
-		/// </summary>
-		public EventLogEntryType Type { get; set; }
-
-		/// <summary>
-		/// Gets or sets the message of the entry.
-		/// </summary>
-		public string Message { get; set; }
-
-		/// <summary>
-		/// Gets or sets the data associated with the entry.
-		/// </summary>
-		public string Data { get; set; }
-
-
-		/// <summary>
-		/// Sorts the entries descendingly by their timestamp.
-		/// </summary>
-		public int CompareTo(LogEntry other)
-		{
- 			return other.TimeStamp.CompareTo(TimeStamp);
-		}
-	}
-
-	#endregion
-
-
-	/// <summary>
-	/// Provides an easy way of writing to a XML log.
-	/// This class is thread-safe.
+	/// Provides an easy way of writing to an XML log.
+	/// The public static members of this class are thread-safe.
 	/// </summary>
 	public class Log : XmlFileManager
 	{
 		// path to the XML file, relative to the user's AppData folder
 		private static readonly string PATH = Path.Combine("RoboMirror", "Log.xml");
 
+		#region LogEntry class
+		public class LogEntry
+		{
+			private Lazy<string> _data;
+
+			public DateTime TimeStamp { get; private set; }
+			public EventLogEntryType Type { get; private set; }
+			public string Message { get; private set; }
+			public string Data { get { return _data.Value; } }
+
+			public LogEntry(DateTime timeStamp, EventLogEntryType type, string message, string data)
+			{
+				if (message == null)
+					throw new ArgumentNullException("message");
+
+				TimeStamp = timeStamp;
+				Type = type;
+				Message = message;
+				_data = new Lazy<string>(() => data, isThreadSafe: false);
+			}
+
+			public LogEntry(DateTime timeStamp, EventLogEntryType type, string message, Func<string> dataFactory)
+			{
+				if (message == null)
+					throw new ArgumentNullException("message");
+
+				TimeStamp = timeStamp;
+				Type = type;
+				Message = message;
+				_data = new Lazy<string>(dataFactory, isThreadSafe: false);
+			}
+		}
+		#endregion
 
 		#region Static stuff
 
-		public static void WriteEntry(string taskGuid, EventLogEntryType type,
-			string message, string data)
+		public static LogEntry WriteEntry(string taskGuid, EventLogEntryType type,
+			string message, string data, bool updateLastSuccessTimeStamp)
 		{
 			if (string.IsNullOrEmpty(taskGuid))
 				throw new ArgumentNullException("taskGuid");
 			if (string.IsNullOrEmpty(message))
 				throw new ArgumentNullException("message");
 
-			var entry = new LogEntry()
-			{
-				TimeStamp = DateTime.Now,
-				Type = type,
-				Message = message,
-				Data = data
-			};
+			var entry = new LogEntry(DateTime.Now, type, message, data);
 
-			// ~100 attempts with 100 ms delay to open the file for writing
+			// FileLock.RETRY_ATTEMPTS with FileLock.RETRY_DELAY to open the file for writing
 			for (int i = 0; true; ++i)
 			{
 				try
 				{
-					using (var log = new Log(false))
-					{
-						log.Write(taskGuid, entry);
-					}
+					using (var log = new Log(readOnly: false))
+						log.Write(taskGuid, entry, updateLastSuccessTimeStamp);
+
 					break;
 				}
 				catch (FileLockedException)
 				{
-					if (i >= 100)
+					if (i >= FileLock.RETRY_ATTEMPTS)
 						throw;
 
-					System.Threading.Thread.Sleep(100);
+					System.Threading.Thread.Sleep(FileLock.RETRY_DELAY);
 				}
 			}
+
+			return entry;
 		}
 
-		public static List<LogEntry> LoadEntries(string taskGuid)
-		{
-			if (string.IsNullOrEmpty(taskGuid))
-				throw new ArgumentNullException("taskGuid");
-
-			using (var log = new Log(true))
-			{
-				return log.Load(taskGuid);
-			}
-		}
-
-
-		/// <summary>
-		/// Logs a Robocopy run.
-		/// </summary>
+		/// <summary>Logs a Robocopy run.</summary>
 		/// <param name="process">Terminated Robocopy process.</param>
-		public static void LogRun(string taskGuid, RobocopyProcess process, string sourceFolder, string destinationFolder)
+		public static LogEntry LogRun(string taskGuid, RobocopyProcess process, string sourceFolder,
+			string destinationFolder, bool updateLastSuccessTimeStamp)
 		{
 			if (string.IsNullOrEmpty(taskGuid))
 				throw new ArgumentNullException("taskGuid");
@@ -167,7 +143,33 @@ namespace RoboMirror
 				PathHelper.Quote(sourceFolder),
 				PathHelper.Quote(destinationFolder));
 
-			WriteEntry(taskGuid, type, message, process.FullOutput);
+			return WriteEntry(taskGuid, type, message, process.FullOutput,
+				updateLastSuccessTimeStamp);
+		}
+
+		public static List<LogEntry> LoadEntries(string taskGuid)
+		{
+			if (string.IsNullOrEmpty(taskGuid))
+				throw new ArgumentNullException("taskGuid");
+
+			using (var log = new Log(readOnly: true))
+				return log.Load(taskGuid);
+		}
+
+		public static void LoadLastSuccessTimeStamps(IEnumerable<MirrorTask> tasks)
+		{
+			if (tasks == null)
+				throw new ArgumentNullException("tasks");
+
+			using (var log = new Log(readOnly: true))
+			{
+				foreach (var task in tasks)
+				{
+					var lastSuccess = log.GetLastSuccessTimeStamp(task.Guid);
+					if (lastSuccess.HasValue)
+						task.LastOperation = lastSuccess.Value;
+				}
+			}
 		}
 
 		#endregion
@@ -176,75 +178,189 @@ namespace RoboMirror
 		/// <exception cref="FileLockedException"></exception>
 		private Log(bool readOnly)
 			: base(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), PATH), "log", readOnly)
-		{ }
+		{
+			// upgrade to new format:
+			// move /log/entry elements to /log/task[@guid=...]/entry
+			var flatEntries = RootElement.Elements("entry");
+			foreach (var e in flatEntries)
+			{
+				e.Remove();
+
+				string taskGuid = e.Attribute("taskGuid").Value;
+				e.SetAttributeValue("taskGuid", null);
+
+				var taskElement = GetTaskElement(taskGuid, create: true);
+				taskElement.Add(e);
+			}
+		}
+
+		private XElement GetTaskElement(string taskGuid, bool create)
+		{
+			var element = RootElement.Elements("task").SingleOrDefault(
+				e => e.Attribute("guid").Value == taskGuid);
+
+			if (element == null && create)
+			{
+				element = new XElement("task");
+				element.SetAttributeValue("guid", taskGuid);
+				RootElement.Add(element);
+			}
+
+			return element;
+		}
 
 
-		public void Write(string taskGuid, LogEntry entry)
+		#region Last success time stamp
+
+		private static string SerializeDateTime(DateTime dateTime)
+		{
+			return dateTime.ToUniversalTime().ToString("u", System.Globalization.CultureInfo.InvariantCulture);
+		}
+
+		private static DateTime ParseDateTime(string text)
+		{
+			return DateTime.ParseExact(text, "u", System.Globalization.CultureInfo.InvariantCulture).ToLocalTime();
+		}
+
+		public DateTime? GetLastSuccessTimeStamp(string taskGuid)
+		{
+			if (string.IsNullOrEmpty(taskGuid))
+				throw new ArgumentNullException("taskGuid");
+
+			var taskElement = GetTaskElement(taskGuid, create: false);
+			if (taskElement == null)
+				return null;
+
+			var attribute = taskElement.Attribute("lastSuccess");
+			if (attribute == null)
+				return null;
+
+			return ParseDateTime(attribute.Value);
+		}
+
+		private void UpdateLastSuccessTimeStamp(XElement taskElement, DateTime lastSuccess)
+		{
+			var attribute = taskElement.Attribute("lastSuccess");
+			if (attribute == null || lastSuccess > ParseDateTime(attribute.Value))
+				taskElement.SetAttributeValue("lastSuccess", SerializeDateTime(lastSuccess));
+		}
+
+		#endregion
+
+		#region Writing
+
+		public void Write(string taskGuid, LogEntry entry, bool updateLastSuccessTimeStamp)
 		{
 			if (string.IsNullOrEmpty(taskGuid))
 				throw new ArgumentNullException("taskGuid");
 			if (entry == null)
 				throw new ArgumentNullException("entry");
 
-			var entryNode = Document.CreateElement("entry");
-			Document.DocumentElement.AppendChild(entryNode);
+			var taskElement = GetTaskElement(taskGuid, create: true);
 
-			var attribute = Document.CreateAttribute("taskGuid");
-			attribute.Value = taskGuid;
-			entryNode.Attributes.Append(attribute);
+			if (updateLastSuccessTimeStamp)
+				UpdateLastSuccessTimeStamp(taskElement, entry.TimeStamp);
 
-			var node = Document.CreateElement("timeStamp");
-			node.InnerText = entry.TimeStamp.ToUniversalTime().ToString("u");
-			entryNode.AppendChild(node);
+			var entryElement = new XElement("entry");
+			taskElement.Add(entryElement);
 
-			node = Document.CreateElement("type");
-			node.InnerText = entry.Type.ToString();
-			entryNode.AppendChild(node);
-
-			node = Document.CreateElement("message");
-			node.AppendChild(Document.CreateCDataSection(entry.Message));
-			entryNode.AppendChild(node);
+			entryElement.SetElementValue("timeStamp", SerializeDateTime(entry.TimeStamp));
+			entryElement.SetElementValue("type", entry.Type.ToString());
+			entryElement.Add(new XElement("message", new XCData(entry.Message)));
 
 			if (!string.IsNullOrEmpty(entry.Data))
 			{
-				node = Document.CreateElement("data");
-				node.AppendChild(Document.CreateCDataSection(entry.Data));
-				entryNode.AppendChild(node);
+				string dataFilePath = SaveData(taskGuid, entry.Data);
+				entryElement.SetElementValue("dataRef", Path.GetFileName(dataFilePath));
 			}
 
 			Save();
 		}
+
+		/// <summary>Saves an entry's data in a new separate file and returns its path.</summary>
+		private string SaveData(string taskGuid, string data)
+		{
+			string taskSubfolder = GetTaskSubfolder(taskGuid);
+			Directory.CreateDirectory(taskSubfolder);
+
+			string filePath;
+			for (int i = 1; true; ++i)
+			{
+				filePath = Path.Combine(taskSubfolder, i + ".log");
+				if (File.Exists(filePath))
+					continue;
+
+				using (var stream = File.Open(filePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+				{
+					using (var writer = new StreamWriter(stream))
+					{
+						writer.Write(data);
+						break;
+					}
+				}
+			}
+
+			return filePath;
+		}
+
+		private string GetTaskSubfolder(string taskGuid)
+		{
+			string baseFolder = Path.GetDirectoryName(FilePath);
+			return Path.Combine(baseFolder, taskGuid);
+		}
+
+		#endregion
+
+		#region Loading
 
 		public List<LogEntry> Load(string taskGuid)
 		{
 			if (string.IsNullOrEmpty(taskGuid))
 				throw new ArgumentNullException("taskGuid");
 
-			var entries = Document.DocumentElement.SelectNodes(
-				string.Format("entry[@taskGuid=\"{0}\"]", taskGuid));
+			var list = new List<LogEntry>();
 
-			var list = new List<LogEntry>(entries.Count);
+			var taskElement = GetTaskElement(taskGuid, create: false);
+			if (taskElement == null)
+				return list;
 
-			foreach (XmlNode entry in entries)
-			{
-				var item = new LogEntry();
-				list.Add(item);
+			list.AddRange(from entry in taskElement.Elements("entry") select ParseEntry(taskGuid, entry));
 
-				item.TimeStamp = DateTime.ParseExact(entry.SelectSingleNode("timeStamp").InnerText,
-					"u", System.Globalization.CultureInfo.InvariantCulture).ToLocalTime();
-
-				item.Type = (EventLogEntryType)Enum.Parse(typeof(EventLogEntryType), entry.SelectSingleNode("type").InnerText);
-
-				item.Message = entry.SelectSingleNode("message").FirstChild.Value;
-
-				var node = entry.SelectSingleNode("data");
-				if (node != null)
-					item.Data = node.FirstChild.Value;
-			}
-
-			list.Sort();
+			// sort descendingly by time stamp
+			list.Sort((a, b) => { return -a.TimeStamp.CompareTo(b.TimeStamp); });
 
 			return list;
 		}
+
+		private LogEntry ParseEntry(string taskGuid, XElement entry)
+		{
+			var timeStamp = ParseDateTime(entry.Element("timeStamp").Value);
+
+			var type = (EventLogEntryType)Enum.Parse(typeof(EventLogEntryType), entry.Element("type").Value);
+
+			string message = entry.Element("message").DescendantNodes().OfType<XCData>().First().Value;
+
+			LogEntry item;
+			var dataRef = entry.Element("dataRef");
+			if (dataRef != null)
+			{
+				string fileName = dataRef.Value;
+				string taskSubfolder = GetTaskSubfolder(taskGuid);
+				string filePath = Path.Combine(taskSubfolder, fileName);
+
+				item = new LogEntry(timeStamp, type, message, () => File.ReadAllText(filePath));
+			}
+			else // no <dataRef> node; look for <data> node
+			{
+				var dataElement = entry.Element("data");
+				string data = (dataElement == null ? null : dataElement.DescendantNodes().OfType<XCData>().First().Value);
+
+				item = new LogEntry(timeStamp, type, message, data);
+			}
+
+			return item;
+		}
+
+		#endregion
 	}
 }

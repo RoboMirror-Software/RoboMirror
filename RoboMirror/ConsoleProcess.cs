@@ -7,8 +7,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Diagnostics;
+using System.Linq;
+using System.Text;
 using System.Threading;
 
 namespace RoboMirror
@@ -136,10 +137,7 @@ namespace RoboMirror
 
 					var lines = _output;
 
-					int fullLength = 0;
-					foreach (string line in lines)
-						fullLength += line.Length + Environment.NewLine.Length;
-
+					int fullLength = lines.Sum(line => line.Length + Environment.NewLine.Length);
 					var output = new StringBuilder(fullLength);
 					foreach (string line in lines)
 						output.AppendLine(line);
@@ -227,8 +225,8 @@ namespace RoboMirror
 				if (_isDisposed)
 					return;
 
-				_fullyExitedWaitHandle.Close();
-				_process.Close();
+				_fullyExitedWaitHandle.Dispose();
+				_process.Dispose();
 
 				_isDisposed = true;
 			}
@@ -340,11 +338,18 @@ namespace RoboMirror
 			return (d == null ? 0 : d.GetInvocationList().Length);
 		}
 
+		private int _onExitedInvoked = 0;
 		/// <summary>
 		/// Invoked asynchronously when the process has exited.
 		/// </summary>
 		private void OnExited(EventArgs e)
 		{
+			// the Exited event is sometimes triggered a second time
+			// I guess that has to do with disposing of the process in another thread
+			// while the Exited event hasn't been handled completely yet
+			if (Interlocked.Exchange(ref _onExitedInvoked, 1) == 1)
+				return;
+
 			// hijack all (remaining) event handlers from the Exited event
 			EventHandler exitedEventHandlers;
 			lock (_syncObject)

@@ -110,7 +110,7 @@
 			this.pictureBox2.Image = global::RoboMirror.Properties.Resources.data_into24;
 			this.pictureBox2.Location = new System.Drawing.Point(14, 121);
 			this.pictureBox2.Name = "pictureBox2";
-			this.pictureBox2.Size = new System.Drawing.Size(28, 28);
+			this.pictureBox2.Size = new System.Drawing.Size(24, 24);
 			this.pictureBox2.TabIndex = 7;
 			this.pictureBox2.TabStop = false;
 			// 
@@ -136,7 +136,7 @@
 			this.pictureBox1.Image = global::RoboMirror.Properties.Resources.data24;
 			this.pictureBox1.Location = new System.Drawing.Point(14, 14);
 			this.pictureBox1.Name = "pictureBox1";
-			this.pictureBox1.Size = new System.Drawing.Size(28, 28);
+			this.pictureBox1.Size = new System.Drawing.Size(24, 24);
 			this.pictureBox1.TabIndex = 4;
 			this.pictureBox1.TabStop = false;
 			// 

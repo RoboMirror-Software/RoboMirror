@@ -82,7 +82,7 @@ namespace RoboMirror
 			WaitHandle.WaitAll(waitHandles);
 
 			foreach (var waitHandle in waitHandles)
-				waitHandle.Close();
+				waitHandle.Dispose();
 		}
 
 

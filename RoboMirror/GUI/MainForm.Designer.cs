@@ -32,23 +32,28 @@
 			System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
 			this.imageList1 = new System.Windows.Forms.ImageList(this.components);
 			this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+			this.historyButton = new System.Windows.Forms.Button();
+			this.scheduleButton = new System.Windows.Forms.Button();
+			this.addButton = new System.Windows.Forms.Button();
+			this.editButton = new System.Windows.Forms.Button();
+			this.removeButton = new System.Windows.Forms.Button();
 			this.pictureBox1 = new System.Windows.Forms.PictureBox();
 			this.label1 = new System.Windows.Forms.Label();
 			this.mainPanel = new System.Windows.Forms.Panel();
-			this.historyButton = new System.Windows.Forms.Button();
-			this.scheduleButton = new System.Windows.Forms.Button();
 			this.listView1 = new System.Windows.Forms.ListView();
 			this.columnHeader1 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
 			this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
 			this.columnHeader3 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
 			this.columnHeader4 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
 			this.restoreButton = new System.Windows.Forms.Button();
-			this.addButton = new System.Windows.Forms.Button();
 			this.backupButton = new System.Windows.Forms.Button();
-			this.editButton = new System.Windows.Forms.Button();
-			this.removeButton = new System.Windows.Forms.Button();
+			this.mirrorOperationsQueueControl = new RoboMirror.GUI.MirrorOperationsQueueControl();
+			this.label2 = new System.Windows.Forms.Label();
+			this.queuePanel = new System.Windows.Forms.Panel();
+			this.shutdownWhenDoneCheckBox = new System.Windows.Forms.CheckBox();
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
 			this.mainPanel.SuspendLayout();
+			this.queuePanel.SuspendLayout();
 			this.SuspendLayout();
 			// 
 			// imageList1
@@ -56,49 +61,6 @@
 			this.imageList1.ImageStream = ((System.Windows.Forms.ImageListStreamer)(resources.GetObject("imageList1.ImageStream")));
 			this.imageList1.TransparentColor = System.Drawing.Color.Transparent;
 			this.imageList1.Images.SetKeyName(0, "data_copy.png");
-			// 
-			// pictureBox1
-			// 
-			this.pictureBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-			this.pictureBox1.BackColor = System.Drawing.SystemColors.ControlDarkDark;
-			this.pictureBox1.Image = global::RoboMirror.Properties.Resources.about32;
-			this.pictureBox1.Location = new System.Drawing.Point(595, 10);
-			this.pictureBox1.Name = "pictureBox1";
-			this.pictureBox1.Size = new System.Drawing.Size(37, 37);
-			this.pictureBox1.TabIndex = 1003;
-			this.pictureBox1.TabStop = false;
-			this.pictureBox1.Click += new System.EventHandler(this.pictureBox1_Click);
-			// 
-			// label1
-			// 
-			this.label1.BackColor = System.Drawing.SystemColors.ControlDarkDark;
-			this.label1.Dock = System.Windows.Forms.DockStyle.Top;
-			this.label1.ForeColor = System.Drawing.Color.White;
-			this.label1.Location = new System.Drawing.Point(0, 0);
-			this.label1.Name = "label1";
-			this.label1.Padding = new System.Windows.Forms.Padding(14, 0, 65, 0);
-			this.label1.Size = new System.Drawing.Size(646, 58);
-			this.label1.TabIndex = 0;
-			this.label1.Text = "Manage your mirror tasks and perform backup and restore operations.";
-			this.label1.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			// 
-			// mainPanel
-			// 
-			this.mainPanel.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-			this.mainPanel.Controls.Add(this.historyButton);
-			this.mainPanel.Controls.Add(this.scheduleButton);
-			this.mainPanel.Controls.Add(this.listView1);
-			this.mainPanel.Controls.Add(this.restoreButton);
-			this.mainPanel.Controls.Add(this.addButton);
-			this.mainPanel.Controls.Add(this.backupButton);
-			this.mainPanel.Controls.Add(this.editButton);
-			this.mainPanel.Controls.Add(this.removeButton);
-			this.mainPanel.Location = new System.Drawing.Point(14, 72);
-			this.mainPanel.Name = "mainPanel";
-			this.mainPanel.Size = new System.Drawing.Size(618, 249);
-			this.mainPanel.TabIndex = 0;
 			// 
 			// historyButton
 			// 
@@ -133,6 +95,98 @@
 			this.toolTip1.SetToolTip(this.scheduleButton, "Schedule the selected mirror task.");
 			this.scheduleButton.UseVisualStyleBackColor = true;
 			this.scheduleButton.Click += new System.EventHandler(this.scheduleButton_Click);
+			// 
+			// addButton
+			// 
+			this.addButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+			this.addButton.Image = global::RoboMirror.Properties.Resources.data_copy_add;
+			this.addButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+			this.addButton.Location = new System.Drawing.Point(501, 0);
+			this.addButton.Name = "addButton";
+			this.addButton.Padding = new System.Windows.Forms.Padding(10, 0, 12, 0);
+			this.addButton.Size = new System.Drawing.Size(117, 27);
+			this.addButton.TabIndex = 1;
+			this.addButton.Text = "Add task...";
+			this.addButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+			this.toolTip1.SetToolTip(this.addButton, "Add a new mirror task.");
+			this.addButton.UseVisualStyleBackColor = true;
+			this.addButton.Click += new System.EventHandler(this.addButton_Click);
+			// 
+			// editButton
+			// 
+			this.editButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+			this.editButton.Enabled = false;
+			this.editButton.Image = global::RoboMirror.Properties.Resources.data_copy;
+			this.editButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+			this.editButton.Location = new System.Drawing.Point(501, 33);
+			this.editButton.Name = "editButton";
+			this.editButton.Padding = new System.Windows.Forms.Padding(10, 0, 32, 0);
+			this.editButton.Size = new System.Drawing.Size(117, 27);
+			this.editButton.TabIndex = 2;
+			this.editButton.Text = "Edit...";
+			this.editButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+			this.toolTip1.SetToolTip(this.editButton, "Edit the selected mirror task.");
+			this.editButton.UseVisualStyleBackColor = true;
+			this.editButton.Click += new System.EventHandler(this.editButton_Click);
+			// 
+			// removeButton
+			// 
+			this.removeButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+			this.removeButton.Enabled = false;
+			this.removeButton.Image = global::RoboMirror.Properties.Resources.data_copy_delete;
+			this.removeButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+			this.removeButton.Location = new System.Drawing.Point(501, 67);
+			this.removeButton.Name = "removeButton";
+			this.removeButton.Padding = new System.Windows.Forms.Padding(10, 0, 23, 0);
+			this.removeButton.Size = new System.Drawing.Size(117, 27);
+			this.removeButton.TabIndex = 3;
+			this.removeButton.Text = "Remove";
+			this.removeButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+			this.toolTip1.SetToolTip(this.removeButton, "Remove the selected mirror task.");
+			this.removeButton.UseVisualStyleBackColor = true;
+			this.removeButton.Click += new System.EventHandler(this.removeButton_Click);
+			// 
+			// pictureBox1
+			// 
+			this.pictureBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+			this.pictureBox1.BackColor = System.Drawing.SystemColors.ControlDarkDark;
+			this.pictureBox1.Image = global::RoboMirror.Properties.Resources.about32;
+			this.pictureBox1.Location = new System.Drawing.Point(600, 13);
+			this.pictureBox1.Name = "pictureBox1";
+			this.pictureBox1.Size = new System.Drawing.Size(32, 32);
+			this.pictureBox1.TabIndex = 1003;
+			this.pictureBox1.TabStop = false;
+			this.pictureBox1.Click += new System.EventHandler(this.pictureBox1_Click);
+			// 
+			// label1
+			// 
+			this.label1.BackColor = System.Drawing.SystemColors.ControlDarkDark;
+			this.label1.Dock = System.Windows.Forms.DockStyle.Top;
+			this.label1.ForeColor = System.Drawing.Color.White;
+			this.label1.Location = new System.Drawing.Point(0, 0);
+			this.label1.Name = "label1";
+			this.label1.Padding = new System.Windows.Forms.Padding(14, 0, 65, 0);
+			this.label1.Size = new System.Drawing.Size(646, 58);
+			this.label1.TabIndex = 0;
+			this.label1.Text = "Manage your mirror tasks and perform backup and restore operations.";
+			this.label1.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+			// 
+			// mainPanel
+			// 
+			this.mainPanel.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+			this.mainPanel.Controls.Add(this.historyButton);
+			this.mainPanel.Controls.Add(this.scheduleButton);
+			this.mainPanel.Controls.Add(this.listView1);
+			this.mainPanel.Controls.Add(this.restoreButton);
+			this.mainPanel.Controls.Add(this.addButton);
+			this.mainPanel.Controls.Add(this.backupButton);
+			this.mainPanel.Controls.Add(this.editButton);
+			this.mainPanel.Controls.Add(this.removeButton);
+			this.mainPanel.Location = new System.Drawing.Point(14, 72);
+			this.mainPanel.Name = "mainPanel";
+			this.mainPanel.Size = new System.Drawing.Size(618, 249);
+			this.mainPanel.TabIndex = 0;
 			// 
 			// listView1
 			// 
@@ -195,22 +249,6 @@
 			this.restoreButton.UseVisualStyleBackColor = true;
 			this.restoreButton.Click += new System.EventHandler(this.restoreButton_Click);
 			// 
-			// addButton
-			// 
-			this.addButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-			this.addButton.Image = global::RoboMirror.Properties.Resources.data_copy_add;
-			this.addButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			this.addButton.Location = new System.Drawing.Point(501, 0);
-			this.addButton.Name = "addButton";
-			this.addButton.Padding = new System.Windows.Forms.Padding(10, 0, 12, 0);
-			this.addButton.Size = new System.Drawing.Size(117, 27);
-			this.addButton.TabIndex = 1;
-			this.addButton.Text = "Add task...";
-			this.addButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-			this.toolTip1.SetToolTip(this.addButton, "Add a new mirror task.");
-			this.addButton.UseVisualStyleBackColor = true;
-			this.addButton.Click += new System.EventHandler(this.addButton_Click);
-			// 
 			// backupButton
 			// 
 			this.backupButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
@@ -227,45 +265,59 @@
 			this.backupButton.UseVisualStyleBackColor = true;
 			this.backupButton.Click += new System.EventHandler(this.backupButton_Click);
 			// 
-			// editButton
+			// mirrorOperationsQueueControl
 			// 
-			this.editButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-			this.editButton.Enabled = false;
-			this.editButton.Image = global::RoboMirror.Properties.Resources.data_copy;
-			this.editButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			this.editButton.Location = new System.Drawing.Point(501, 33);
-			this.editButton.Name = "editButton";
-			this.editButton.Padding = new System.Windows.Forms.Padding(10, 0, 32, 0);
-			this.editButton.Size = new System.Drawing.Size(117, 27);
-			this.editButton.TabIndex = 2;
-			this.editButton.Text = "Edit...";
-			this.editButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-			this.toolTip1.SetToolTip(this.editButton, "Edit the selected mirror task.");
-			this.editButton.UseVisualStyleBackColor = true;
-			this.editButton.Click += new System.EventHandler(this.editButton_Click);
+			this.mirrorOperationsQueueControl.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+			this.mirrorOperationsQueueControl.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+			this.mirrorOperationsQueueControl.Location = new System.Drawing.Point(0, 18);
+			this.mirrorOperationsQueueControl.Name = "mirrorOperationsQueueControl";
+			this.mirrorOperationsQueueControl.Size = new System.Drawing.Size(618, 104);
+			this.mirrorOperationsQueueControl.TabIndex = 1;
+			this.mirrorOperationsQueueControl.AllFinished += new System.EventHandler(this.mirrorOperationsQueueControl_AllFinished);
 			// 
-			// removeButton
+			// label2
 			// 
-			this.removeButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-			this.removeButton.Enabled = false;
-			this.removeButton.Image = global::RoboMirror.Properties.Resources.data_copy_delete;
-			this.removeButton.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-			this.removeButton.Location = new System.Drawing.Point(501, 67);
-			this.removeButton.Name = "removeButton";
-			this.removeButton.Padding = new System.Windows.Forms.Padding(10, 0, 23, 0);
-			this.removeButton.Size = new System.Drawing.Size(117, 27);
-			this.removeButton.TabIndex = 3;
-			this.removeButton.Text = "Remove";
-			this.removeButton.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-			this.toolTip1.SetToolTip(this.removeButton, "Remove the selected mirror task.");
-			this.removeButton.UseVisualStyleBackColor = true;
-			this.removeButton.Click += new System.EventHandler(this.removeButton_Click);
+			this.label2.AutoSize = true;
+			this.label2.BackColor = System.Drawing.Color.Transparent;
+			this.label2.Location = new System.Drawing.Point(0, 0);
+			this.label2.Name = "label2";
+			this.label2.Size = new System.Drawing.Size(104, 15);
+			this.label2.TabIndex = 0;
+			this.label2.Text = "Operations queue:";
+			// 
+			// queuePanel
+			// 
+			this.queuePanel.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+			this.queuePanel.Controls.Add(this.shutdownWhenDoneCheckBox);
+			this.queuePanel.Controls.Add(this.mirrorOperationsQueueControl);
+			this.queuePanel.Controls.Add(this.label2);
+			this.queuePanel.Location = new System.Drawing.Point(14, 335);
+			this.queuePanel.Name = "queuePanel";
+			this.queuePanel.Size = new System.Drawing.Size(618, 144);
+			this.queuePanel.TabIndex = 1;
+			// 
+			// shutdownWhenDoneCheckBox
+			// 
+			this.shutdownWhenDoneCheckBox.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+			this.shutdownWhenDoneCheckBox.AutoSize = true;
+			this.shutdownWhenDoneCheckBox.BackColor = System.Drawing.Color.Transparent;
+			this.shutdownWhenDoneCheckBox.Location = new System.Drawing.Point(0, 125);
+			this.shutdownWhenDoneCheckBox.Name = "shutdownWhenDoneCheckBox";
+			this.shutdownWhenDoneCheckBox.Size = new System.Drawing.Size(142, 19);
+			this.shutdownWhenDoneCheckBox.TabIndex = 2;
+			this.shutdownWhenDoneCheckBox.Text = "Shutdown when done";
+			this.shutdownWhenDoneCheckBox.UseVisualStyleBackColor = false;
 			// 
 			// MainForm
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.ClientSize = new System.Drawing.Size(646, 333);
+			this.ClientSize = new System.Drawing.Size(646, 493);
+			this.Controls.Add(this.queuePanel);
 			this.Controls.Add(this.pictureBox1);
 			this.Controls.Add(this.label1);
 			this.Controls.Add(this.mainPanel);
@@ -277,6 +329,8 @@
 			this.Text = "RoboMirror";
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
 			this.mainPanel.ResumeLayout(false);
+			this.queuePanel.ResumeLayout(false);
+			this.queuePanel.PerformLayout();
 			this.ResumeLayout(false);
 
 		}
@@ -300,5 +354,9 @@
 		private System.Windows.Forms.Button scheduleButton;
 		private System.Windows.Forms.PictureBox pictureBox1;
 		private System.Windows.Forms.Button historyButton;
+		private MirrorOperationsQueueControl mirrorOperationsQueueControl;
+		private System.Windows.Forms.Label label2;
+		private System.Windows.Forms.Panel queuePanel;
+		private System.Windows.Forms.CheckBox shutdownWhenDoneCheckBox;
 	}
 }
